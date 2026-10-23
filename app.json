@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "FIX50",
+    "slug": "fix50",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "favicon": "./assets/favicon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "fix50",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0D10"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "nl.fix50.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "FIX50 gebruikt je locatie alleen tijdens een performance-meting om snelheid en acceleratie te meten. Routes worden niet opgeslagen.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "FIX50 gebruikt je locatie alleen tijdens een performance-meting om snelheid en acceleratie te meten. Routes worden niet opgeslagen.",
+        "NSMotionUsageDescription": "FIX50 gebruikt bewegingssensoren om het startmoment van een meting te detecteren."
+      }
+    },
+    "android": {
+      "package": "nl.fix50.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon-foreground.png",
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png",
+        "backgroundColor": "#0B0D10"
+      }
+    },
+    "plugins": [
+      "expo-location",
+      [
+        "expo-notifications",
+        {
+          "color": "#F97316"
+        }
+      ],
+      "expo-sqlite",
+      "expo-font",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+        "photosPermission": "FIX50 gebruikt je foto's om een foto van je scooter of je factuur te kiezen voor je profiel en dossier.",
+        "cameraPermission": "FIX50 gebruikt je camera om een foto van je scooter of je factuur te maken voor je profiel en dossier."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    },
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#0B0D10",
+      "translucent": true
+    }
+  }
+}

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<title>FIX50 — feature graphic 1024×500</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0C0D0F; --surface:#121417; --surface-alt:#17191E; --surface-high:#1D2026;
+    --line:#252830; --text:#E6E8EB; --muted:#9BA1AB; --subtle:#6B7280;
+    --primary:#FF6B00; --display:'Space Grotesk','Inter',sans-serif; --font:'Inter',sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ width:1024px; height:500px; overflow:hidden; }
+  body{ background:var(--bg); font-family:var(--font); -webkit-font-smoothing:antialiased; }
+
+  /* sfeer — zelfde glow + korrel-signatuur als de walkthrough */
+  .glow{ position:absolute; border-radius:50%; filter:blur(90px); pointer-events:none; }
+  .g1{ width:560px; height:560px; background:var(--primary); opacity:.14; top:-260px; left:-140px; }
+  .g2{ width:440px; height:440px; background:#8A5CF6; opacity:.09; bottom:-200px; right:-100px; }
+  .grain::after{ content:''; position:absolute; inset:0; pointer-events:none;
+    background-image:radial-gradient(rgba(255,255,255,.04) 1px, transparent 1px); background-size:22px 22px; }
+
+  /* oranje bisel, linksboven en -onder — het FIX50-caliper-signature */
+  .caliper{ position:absolute; left:0; top:0; bottom:0; width:6px;
+    background:linear-gradient(180deg, var(--primary), rgba(255,107,0,.15)); }
+
+  /* ── tekstkolom ── */
+  .col{ position:absolute; left:64px; top:0; bottom:0; width:560px;
+    display:flex; flex-direction:column; justify-content:center; }
+  .brand{ font-family:var(--display); font-weight:700; font-size:26px; letter-spacing:-.3px; color:var(--text); }
+  .brand b{ color:var(--primary); }
+  .kicker{ margin-top:10px; font-family:var(--display); font-size:13px; font-weight:600;
+    letter-spacing:.18em; text-transform:uppercase; color:var(--primary); }
+
+  h1{ margin-top:14px; font-family:var(--display); font-weight:700; font-size:62px;
+    line-height:1.02; letter-spacing:-.02em; color:var(--text); text-wrap:balance; }
+  h1 em{ font-style:normal; color:var(--primary); }
+
+  .chips{ display:flex; gap:8px; margin-top:22px; flex-wrap:wrap; }
+  .chip{ font-size:12px; font-weight:700; color:var(--muted); background:var(--surface);
+    border:1px solid var(--line); padding:8px 14px; border-radius:999px; white-space:nowrap; }
+
+  .statusline{ margin-top:20px; display:flex; align-items:center; gap:8px;
+    font-size:12.5px; color:var(--muted); }
+  .statusline i{ width:6px; height:6px; border-radius:3px; background:var(--primary); }
+
+  /* ── telemetrie-kaart rechts: het herkenbare FIX50-dashboard-signaal ── */
+  .panel{ position:absolute; right:52px; top:50%; transform:translateY(-50%);
+    width:280px; background:var(--surface); border:1px solid var(--line); border-radius:18px;
+    padding:18px; box-shadow:0 30px 70px rgba(0,0,0,.55); }
+  .panel .eyebrow{ font-family:var(--display); font-size:10px; font-weight:600;
+    letter-spacing:.09em; text-transform:uppercase; color:var(--primary); }
+  .panel .row{ display:flex; justify-content:space-between; align-items:baseline; margin-top:5px; }
+  .panel .row b{ font-family:var(--display); font-weight:700; font-size:30px; letter-spacing:-.3px; color:var(--text); }
+  .panel .row span{ color:var(--muted); font-size:11px; }
+  .panel .sep{ height:1px; background:var(--line); margin:13px 0; }
+  .panel .task{ display:flex; align-items:center; gap:9px; font-size:12.5px; color:var(--text); }
+  .panel .task > i{ width:26px; height:26px; border-radius:8px; background:rgba(255,107,0,.12);
+    display:grid; place-items:center; font-size:13px; flex:0 0 auto; }
+  .panel .task small{ color:var(--muted); font-size:10.5px; display:block; margin-top:1px; }
+  .panel .due{ margin-left:auto; font-size:9.5px; font-weight:800; letter-spacing:.05em;
+    text-transform:uppercase; padding:3px 8px; border-radius:999px;
+    background:rgba(239,68,68,.16); color:#EF4444; white-space:nowrap; }
+  .pbar{ height:4px; border-radius:2px; background:var(--surface-high); overflow:hidden; margin-top:13px; }
+  .pbar i{ display:block; height:100%; width:72%; border-radius:2px; background:var(--primary); }
+  .panel .foot{ margin-top:9px; font-size:10.5px; color:var(--subtle); }
+</style>
+</head>
+<body class="grain">
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <div class="caliper"></div>
+
+  <div class="col">
+    <div class="brand">Fix<b>50</b></div>
+    <div class="kicker">Jouw scooter. Volledig in de hand.</div>
+    <h1>Onderhoud dat<br />zichzelf <em>afdenkt.</em></h1>
+    <div class="chips">
+      <div class="chip">🔧 Onderhoud</div>
+      <div class="chip">🤖 AI-scan</div>
+      <div class="chip">⚡ Metingen</div>
+      <div class="chip">📄 PDF-boekje</div>
+    </div>
+    <div class="statusline"><i></i> Herinneringen vóór het echte werk begint</div>
+  </div>
+
+  <div class="panel">
+    <div class="eyebrow">Piaggio Zip SP · 2T</div>
+    <div class="row"><b>12.845</b><span>km</span></div>
+    <p class="foot">kilometerstand, live bijgehouden</p>
+    <div class="pbar"><i></i></div>
+    <div class="sep"></div>
+    <div class="task">
+      <i>🔧</i>
+      <div>Bougie vervangen<small>binnen 3 dagen</small></div>
+      <span class="due">te laat</span>
+    </div>
+    <div class="sep" style="margin:11px 0;"></div>
+    <div class="task">
+      <i>⚡</i>
+      <div>Topsnelheid<small>na tuning</small></div>
+      <span class="due" style="background:rgba(34,197,94,.14); color:#22C55E;">+6,4%</span>
+    </div>
+  </div>
+</body>
+</html>

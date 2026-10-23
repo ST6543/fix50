@@ -1,0 +1,24 @@
+{
+  "appId": "nl.fix50.desktop",
+  "productName": "FIX50",
+  "directories": {
+    "output": "desktop-build"
+  },
+  "files": [
+    "desktop/main.js",
+    "desktop/www/**/*",
+    "assets/icon.png"
+  ],
+  "extraMetadata": {
+    "main": "desktop/main.js"
+  },
+  "win": {
+    "target": ["portable"],
+    "icon": "assets/icon.png"
+  },
+  "portable": {
+    "artifactName": "FIX50.exe"
+  },
+  "npmRebuild": false,
+  "compression": "normal"
+}

@@ -1,0 +1,48 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+web-build/
+.expo/
+*.log
+*.tar.gz
+
+# desktop-build artefacten (EXE's zijn te groot voor GitHub, >100 MB-limiet)
+desktop-build/
+*.exe
+marketing/out/
+# native folders (managed workflow)
+ios/
+android/
+
+# environment & secrets — NOOIT committen
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# generated
+supabase/seed/diagnosis_seed.sql
+supabase/.branches
+supabase/.temp
+
+# test
+coverage/
+
+# freebuff workspace-metadata (persoonlijke lokale map)
+.freebuff/
+
+# persoonlijke demo-data (niet relevant voor repo)
+onderhoud-mijn-aerox.csv
+vispayload.json
+# analyse dumps van bronbestanden (tijdelijk)
+source_oao_text.txt
+source_excel_dump.txt

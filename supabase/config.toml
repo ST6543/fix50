@@ -1,0 +1,14 @@
+# FIX50 — hosted project configuratie.
+# Alleen wat hier gedeclareerd wordt, wordt gepusht naar het project (supabase config push).
+# Bewust minimaal: we wijzigen uitsluitend het e-mailbevestigingsbeleid.
+
+# Gekoppeld Supabase-project (ref, zoals geschreven door `supabase link --project-ref`).
+project_id = "gdjargpxcdgciusycyya"
+
+[auth.email]
+enable_signup = true
+# Bevestigingsmails uit: de ingebouwde SMTP van Supabase zit snel aan de limiet (429)
+# en gebruikers kunnen later alsnog een e-mailadres toevoegen in de app (Profiel).
+enable_confirmations = false
+double_confirm_changes = false
+enable_change_confirmations = false

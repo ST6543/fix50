@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacyverklaring — FIX50</title>
+<meta name="description" content="Privacyverklaring van FIX50 — de scooter-onderhoudsapp. Welke gegevens we verzamelen, waarom, en jouw rechten." />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0B0D10;
+    --surface: #13161B;
+    --line: #262B33;
+    --text: #EDEFF2;
+    --muted: #9AA1AC;
+    --orange: #F97316;
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  .caliper { height: 4px; background: var(--orange); position: fixed; top: 0; left: 0; right: 0; z-index: 10; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 64px 24px 96px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
+  .brand { font-weight: 800; font-size: 24px; letter-spacing: -0.5px; }
+  .brand span { color: var(--orange); }
+  .tagline { color: var(--muted); font-size: 13px; letter-spacing: 1.2px; text-transform: uppercase; font-weight: 700; }
+  h1 {
+    font-size: clamp(28px, 6vw, 40px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+  .updated { color: var(--muted); font-size: 13.5px; margin-bottom: 40px; }
+  h2 {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    margin: 40px 0 12px;
+    padding-left: 12px;
+    border-left: 3px solid var(--orange);
+    line-height: 1.4;
+  }
+  p { margin-bottom: 14px; color: var(--text); }
+  p.lead { color: var(--muted); font-size: 17px; }
+  ul { margin: 0 0 16px 20px; }
+  li { margin-bottom: 8px; }
+  li::marker { color: var(--orange); }
+  strong { font-weight: 700; color: #fff; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px 22px;
+    margin: 18px 0;
+  }
+  .card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .card p { color: var(--muted); font-size: 14.5px; margin: 0; }
+  .contact {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px;
+    margin-top: 40px;
+    text-align: center;
+  }
+  .contact a {
+    color: var(--orange);
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(249, 115, 22, 0.35);
+  }
+  footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  @media print { body { background: #fff; color: #000; } .caliper { position: static; } }
+</style>
+</head>
+<body>
+<div class="caliper"></div>
+<div class="wrap">
+  <header>
+    <div class="brand">FIX<span>50</span></div>
+    <div class="tagline">Scooter Onderhoud · Tuning · Telemetrie</div>
+  </header>
+
+  <h1>Privacyverklaring</h1>
+  <p class="lead">Je scooter, jouw gegevens. Dit is exact wat we verzamelen, waarom, en wat jij zelf kunt doen.</p>
+  <p class="updated">Laatst bijgewerkt: <strong>16 oktober 2026</strong></p>
+
+  <h2>1. Welke gegevens we gebruiken</h2>
+  <ul>
+    <li><strong>Account</strong> — je e-mailadres en (optioneel) je naam. Alleen om je dossier veilig bij jou te bewaren.</li>
+    <li><strong>Scooterdata</strong> — kilometerstand, onderhoud, tuning, metingen en notities. Alleen zichtbaar voor jou.</li>
+    <li><strong>Locatie</strong> — alléén tijdens een performance-meting, om snelheid en acceleratie te meten. <strong>We slaan geen routes op</strong>; van meetpunten bewaren we alleen snelheid en nauwkeurigheid.</li>
+    <li><strong>Foto's</strong> — als jij een foto van je scooter of factuur toevoegt. Alleen met jouw handeling, en verwijderbaar.</li>
+    <li><strong>Diagnose-chat</strong> — je berichten, zodat de antwoorden passen op jouw scooter en dossier.</li>
+    <li><strong>Push-token</strong> — als je meldingen aanzet, om onderhoudsherinneringen te kunnen sturen.</li>
+  </ul>
+
+  <h2>2. Hoe we met je gegevens omgaan</h2>
+  <div class="card">
+    <h3>Versleuteld en opgeslagen in de EU</h3>
+    <p>Je gegevens staan versleuteld bij Supabase (EU-regio) en worden uitsluitend beveiligd overgedragen (HTTPS). Alleen jij hebt toegang tot je eigen dossier.</p>
+  </div>
+  <div class="card">
+    <h3>Geen verkoop, geen ad-trackers</h3>
+    <p>We verkopen niets, delen niets met advertentiebedrijven en hebben geen ad-trackers in de app staan.</p>
+  </div>
+  <div class="card">
+    <h3>AI in de diagnose-chat</h3>
+    <p>Diagnose-antwoorden lopen via een AI-provider die de tekst <strong>uitsluitend opdrachtmatig verwerkt</strong> en <strong>niét gebruikt om modellen te trainen</strong>. De API-sleutel staat op de server en verlaat die nooit.</p>
+  </div>
+
+  <h2>3. Jouw rechten</h2>
+  <ul>
+    <li>Bekijk en verwijder je metingen, scooters, facturen en chats rechtstreeks in de app.</li>
+    <li>Wis je lokale cache via <em>Privacy &amp; gegevens</em> — je online gegevens blijven staan en worden opnieuw gecachet.</li>
+    <li><strong>Verwijder je complete account</strong> via <em>Privacy &amp; gegevens → Account verwijderen</em>. Alles — servergegevens, foto's, gesprekken — wordt permanent gewist. Dit vereist een tweestaps-bevestiging in de app.</li>
+    <li>Vragen of een verzoek buiten de app om? Mail <a href="mailto:privacy@fix50.works" style="color:var(--orange); text-decoration:none;">privacy@fix50.works</a>.</li>
+  </ul>
+
+  <h2>4. Kinderen</h2>
+  <p>FIX50 is niet gericht op kinderen jonger dan 13 en verzamelt bewust geen gegevens van hen.</p>
+
+  <h2>5. Wijzigingen op deze verklaring</h2>
+  <p>Grote wijzigingen kondigen we in de app aan. Blijvend gebruik na een aanpassing betekent dat je akkoord gaat met de nieuwste versie.</p>
+
+  <div class="contact">
+    <p style="color:var(--muted); font-size:14.5px; margin-bottom:10px;">Vragen over je privacy?</p>
+    <a href="mailto:privacy@fix50.works">privacy@fix50.works</a>
+  </div>
+
+  <footer>
+    <div>© 2026 FIX50 — Scooter Onderhoud</div>
+    <div><a href="https://fix50.works" style="color:var(--muted); text-decoration:none;">fix50.works</a></div>
+  </footer>
+</div>
+</body>
+</html>

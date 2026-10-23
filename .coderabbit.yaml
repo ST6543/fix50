@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+
+reviews:
+  profile: chill
+  high_level_summary: true
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+  # Alleen reviewen wat er toe doet: geen lockfile, build-output, logs of
+  # gegenereerde bestanden. Alles wat niet expliciet uitgesloten is, wordt gereviewd.
+  path_filters:
+    - "!package-lock.json"
+    - "!node_modules/**"
+    - "!dist/**"
+    - "!desktop/www/**"
+    - "!desktop/*.log"
+    - "!.expo/**"
+    - "!coverage/**"
+    - "!*.log"
+    - "!*.exe"
+    - "!supabase/seed/diagnosis_seed.sql"
+    - "!supabase/.temp/**"
+    - "!supabase/.branches/**"
+    - "!source_excel_dump.txt"
+    - "!source_oao_text.txt"
+    - "!Downloads-FIX50-FIX50.exe"
+
+  path_instructions:
+    - path: "tests/**/*.test.ts"
+      instructions: >-
+        Jest met de jest-expo preset (testMatch: **/tests/**/*.test.ts, setup
+        in jest.setup.js, alias @/ -> src/). Controleer dat tests echte
+        gedragingen en randgevallen afdekken (validatie, GPS-smoothing,
+        km-voorspelling, tankverbruik, AI-guardrails) en niet alleen het
+        happy path. Assertions moeten betekenisvol zijn: geen snapshots of
+        tests die alleen op mocks draaien, en geen verzwakte assertions om
+        een check te laten slagen.
+    - path: "src/**"
+      instructions: >-
+        React Native 0.86 + Expo SDK 57 met TypeScript strict. Gebruik
+        functionele componenten en hooks, geen any of ts-ignore, en houd
+        Supabase-toegang in de services-laag (src/services/*) in plaats van
+        direct in schermen. Valideer externe/invoerdata met zod
+        (src/lib/validation.ts). Alle UI-teksten zijn Nederlands.
+    - path: "supabase/functions/**"
+      instructions: >-
+        Deno Edge Functions. Valideer de request-body met zod voordat je iets
+        doet, gebruik de service-role-credentials uitsluitend server-side, en
+        log nooit gevoelige waarden of volledige toegangsgegevens. Faal veilig:
+        nooit een AI-antwoord forceren als de FIX50-data ontbreekt.
+    - path: "supabase/migrations/**"
+      instructions: >-
+        Postgres/Supabase-migraties. Elke nieuwe gebruikerstabel heeft RLS
+        aan met policies die eigendom server-side afdwingen; nooit RLS
+        uitschakelen of een permissive policy zonder user-scope toevoegen.
+    - path: "scripts/**"
+      instructions: >-
+        Node/tsx-hulpscripts, lokaal uitgevoerd. Nooit geheimen hardcoderen en
+        nooit service-role-gegevens of .env-inhoud loggen of committen.
+
+  tools:
+    eslint:
+      enabled: true
+
+chat:
+  auto_reply: true

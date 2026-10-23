@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FIX50 — walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#0C0D0F; --surface:#121417; --surface-alt:#17191E; --surface-high:#1D2026;
+    --line:#252830; --line-soft:#1F2228;
+    --text:#E6E8EB; --muted:#9BA1AB; --subtle:#6B7280;
+    --primary:#FF6B00; --primary-light:#FF7A00;
+    --danger:#EF4444; --success:#22C55E; --warning:#FACC15; --info:#38BDF8;
+    --font:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;
+    --display:'Space Grotesk','Inter',sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{background:#000; color:var(--text); font-family:var(--font); overflow:hidden; -webkit-font-smoothing:antialiased;}
+  #stage{position:fixed; inset:0; background:var(--bg);}
+
+  /* ── sfeer: say zijn subtiele oranje gloed + korrel ─────────────── */
+  .glow{position:absolute; border-radius:50%; filter:blur(90px); opacity:.16; pointer-events:none;}
+  .g1{width:520px;height:520px;background:var(--primary); top:-180px; left:50%; translate:-50% 0;}
+  .g2{width:460px;height:460px;background:#8A5CF6; bottom:-160px; right:-120px; opacity:.10;}
+  .grain::after{content:''; position:absolute; inset:0; pointer-events:none;
+    background-image:radial-gradient(rgba(255,255,255,.045) 1px, transparent 1px); background-size:24px 24px;}
+
+  /* vignet op de randen (video-look) */
+  .vignette{position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.5) 100%);}
+
+  /* ── architecturele fitting ─────────────────────────────────────── */
+  #fit{position:fixed; left:50%; top:50%; width:608px; height:1080px; transform-origin:center;}
+
+  /* ── koppen — hook-first copywriting ────────────────────────────── */
+  .kicker{font-family:var(--display); font-size:15px; font-weight:600; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--primary); white-space:nowrap;}
+  .kline{height:2px; width:40px; background:var(--primary); margin-top:12px; border-radius:1px;
+    transform:scaleX(0); transform-origin:left;}
+  .scene.active .kline{animation:kx .45s .1s cubic-bezier(.2,.9,.2,1) forwards;}
+  @keyframes kx{to{transform:scaleX(1);}}
+  .headline{font-family:var(--display); font-weight:700; line-height:1.04; font-size:48px;
+    letter-spacing:-.015em; margin-top:18px; color:var(--text); text-wrap:balance;}
+  .headline em{font-style:normal; color:var(--primary);}
+  .cap{color:var(--muted); font-size:18px; font-weight:500; margin-top:12px; text-wrap:balance;}
+
+  .copyblock{text-align:left;}
+
+  /* ── telefoonimoeting — zoom-sequencing ─────────────────────────── */
+  .shot{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none;}
+  .shot.active{opacity:1; pointer-events:auto;}
+  .shot .phone{
+    width:300px; height:630px; background:#05060A; border-radius:46px; padding:9px; flex:0 0 auto;
+    box-shadow:0 46px 100px rgba(0,0,0,.72), 0 0 0 2px #23262D, inset 0 0 0 2px rgba(255,255,255,.05);
+  }
+  .phone::before{content:''; position:absolute; top:18px; left:50%; transform:translateX(-50%);
+    width:88px; height:23px; background:#05060A; border-radius:13px; z-index:6;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.06);}
+  .screen{width:100%; height:100%; border-radius:37px; overflow:hidden; background:var(--bg);
+    position:relative; display:flex; flex-direction:column;}
+  .statusbar{display:flex; justify-content:space-between; padding:13px 18px 3px; font-size:11px;
+    color:var(--muted); font-weight:600;}
+  .appbar{padding:8px 18px 4px; display:flex; align-items:center; gap:10px;}
+  .wordmark{font-family:var(--display); font-weight:700; font-size:16px; color:var(--text); letter-spacing:-.3px;}
+  .wordmark b{color:var(--primary); font-weight:700;}
+  .dot{width:5px; height:5px; border-radius:3px; background:var(--primary); display:inline-block; margin-left:5px;}
+  .appname{color:var(--muted); font-size:11px; font-weight:600; margin-top:2px;}
+
+  .tabbar{margin-top:auto; display:flex; justify-content:space-around; padding:10px 8px 18px;
+    border-top:1px solid var(--line-soft); background:var(--surface);}
+  .tabbar div{display:flex; flex-direction:column; align-items:center; gap:3px;}
+  .tabbar .ticon{font-size:17px; opacity:.45; transition:opacity .3s;}
+  .tabbar .tlb{font-size:9px; color:var(--subtle); font-weight:700; letter-spacing:.04em;}
+  .tabbar .on .ticon{opacity:1;}
+  .tabbar .on .tlb{color:var(--primary);}
+  .tabbar .on{position:relative;}
+  .tabbar .on::before{content:''; position:absolute; top:-11px; width:18px; height:2.5px;
+    background:var(--primary); border-radius:2px;}
+
+  /* ── bouwstenen (getrouw aan app-thema) ─────────────────────────── */
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:14px;}
+  .card + .card{margin-top:10px;}
+  .eyebrow{font-family:var(--display); font-size:10px; font-weight:600; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--muted);}
+  .eyebrow.brand{color:var(--primary);}
+  .badge{display:inline-block; font-size:9.5px; font-weight:800; letter-spacing:.05em;
+    text-transform:uppercase; padding:4px 9px; border-radius:999px; white-space:nowrap;}
+  .badge.danger{background:rgba(239,68,68,.16); color:var(--danger);}
+  .badge.warn{background:rgba(250,204,21,.14); color:var(--warning);}
+  .badge.good{background:rgba(34,197,94,.14); color:var(--success);}
+  .badge.neutral{background:var(--surface-high); color:var(--muted);}
+  .stat{font-family:var(--display); font-weight:700; letter-spacing:-.3px;}
+  .rowx{display:flex; align-items:center; gap:10px;}
+  .chev{color:var(--subtle); font-size:13px;}
+  .subtle{color:var(--subtle);}
+  .muted{color:var(--muted);}
+  .pbar{height:4px; border-radius:2px; background:var(--surface-high); overflow:hidden; margin-top:8px;}
+  .pbar i{display:block; height:100%; border-radius:2px; background:var(--primary);}
+  .btn{background:var(--primary); color:var(--bg); font-family:var(--display); font-weight:600;
+    font-size:13px; text-align:center; padding:11px; border-radius:10px;}
+  .btn.ghost{background:var(--surface-alt); color:var(--text); border:1px solid var(--line);}
+
+  /* ── tap-golf (simulation van echte touch) ────────────────────── */
+  .tapdot{position:absolute; width:44px; height:44px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,107,0,.55) 0%, rgba(255,107,0,0) 70%);
+    opacity:0; pointer-events:none; z-index:8;}
+  .scene.active .tapdot{animation:tap .7s ease-out both;}
+  @keyframes tap{0%{opacity:0; transform:scale(.4);} 18%{opacity:1; transform:scale(1);} 100%{opacity:0; transform:scale(1.5);}}
+
+  /* ── sceneorkestratie ──────────────────────────────────────────── */
+  .scene-col{display:flex; flex-direction:column; gap:30px; align-items:center; justify-content:center; height:100%;}
+
+  /* ── scène 0 · hook ─────────────────────────────────────────────── */
+  .h1big{font-family:var(--display); font-weight:700; font-size:64px; line-height:1.02; letter-spacing:-.02em;
+    text-align:center; color:var(--text);}
+  .h1big em{font-style:normal; color:var(--primary);}
+  .hookrow{display:flex; gap:10px; margin-top:24px; justify-content:center;}
+  .hookrow .chip{font-size:12px; font-weight:700; color:var(--muted); background:var(--surface);
+    border:1px solid var(--line); padding:8px 14px; border-radius:999px; white-space:nowrap;}
+  .cursor{display:inline-block; width:3px; height:1.05em; background:var(--primary); vertical-align:-.12em; margin-left:6px;
+    animation:blink 1s steps(1) infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  .hookproof{margin-top:26px; font-size:13.5px; color:var(--muted); text-align:center;}
+  .hookproof b{color:var(--text);}
+
+  /* ── scène 1 · home/hero ────────────────────────────────────────── */
+  .herohead{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .herotitle{font-family:var(--display); font-weight:700; font-size:17px; letter-spacing:-.3px; margin-top:3px; color:var(--text);}
+  .herogrid{display:flex; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line-soft);}
+  .herocell{flex:1; background:var(--surface-alt); border:1px solid var(--line); border-radius:10px; padding:10px;}
+  .heroval{display:flex; align-items:baseline; gap:4px; margin-top:3px;}
+  .heroval b{font-family:var(--display); font-weight:700; font-size:21px; letter-spacing:-.3px; color:var(--text);}
+  .heroval span{color:var(--muted); font-size:11px;}
+  .heroest{color:var(--subtle); font-size:10.5px; margin-top:4px;}
+  .hero-link{color:var(--primary); font-family:var(--display); font-size:11px; font-weight:600; margin-top:8px;}
+  .hero-status{display:flex; align-items:center; gap:6px; margin-top:8px;}
+  .hero-status i{width:6px;height:6px;border-radius:3px;background:var(--primary);display:inline-block;}
+  .hero-status span{color:var(--muted); font-size:11px;}
+
+  .emerg{display:flex; gap:10px; align-items:center; margin-top:10px; border-color:rgba(255,107,0,.35);}
+  .emerg .ic{width:34px; height:34px; border-radius:10px; background:rgba(255,107,0,.12);
+    display:grid; place-items:center; font-size:16px; flex:0 0 auto;}
+  .emerg .nm{font-family:var(--display); font-size:13px; font-weight:600; color:var(--text);}
+  .emerg .sub{color:var(--muted); font-size:10.5px; margin-top:2px;}
+
+  .forecast{display:flex; align-items:center; justify-content:space-between; gap:8px; padding:9px 0;
+    border-bottom:1px solid var(--line-soft);}
+  .forecast:last-of-type{border-bottom:none;}
+  .forecast .nm{flex:1; font-size:12.5px; color:var(--text);}
+  .forecast.over .nm{color:var(--danger); font-weight:700;}
+
+  .zoom{animation:zin .5s cubic-bezier(.2,.9,.25,1) both;}
+  @keyframes zin{from{transform:scale(.92) translateY(14px); opacity:.3;} to{transform:none; opacity:1;}}
+  .shot.active .phone{animation:zin .5s cubic-bezier(.2,.9,.25,1) both;}
+
+  /* ── scène 2 · chat ─────────────────────────────────────────────── */
+  .chat{display:flex; flex-direction:column; gap:9px; padding:12px 13px 14px; flex:1; overflow:hidden;}
+  .bubble{max-width:86%; font-size:12px; line-height:1.42; padding:9px 11px; border-radius:14px;
+    animation:bub .45s cubic-bezier(.2,1.2,.4,1) both;}
+  .bubble.user{align-self:flex-end; background:var(--primary); color:var(--bg); font-weight:600;
+    border-bottom-right-radius:5px;}
+  .bubble.bot{align-self:flex-start; background:var(--surface-alt); border:1px solid var(--line);
+    border-bottom-left-radius:5px;}
+  @keyframes bub{from{opacity:0; transform:translateY(16px) scale(.95);} to{opacity:1; transform:none;}}
+  .dots i{display:inline-block; width:5px; height:5px; border-radius:50%; background:var(--primary-light); margin:0 1.5px;
+    animation:blink 1s infinite;}
+  .dots i:nth-child(2){animation-delay:.15s;} .dots i:nth-child(3){animation-delay:.3s;}
+  .tagchip{align-self:flex-start; font-size:9.5px; font-weight:800; color:var(--primary);
+    border:1px dashed rgba(255,107,0,.5); background:rgba(255,107,0,.08); padding:5px 10px; border-radius:999px;
+    animation:pop .45s cubic-bezier(.2,1.4,.4,1) both;}
+  @keyframes pop{to{opacity:1; transform:none;}}
+  .srcs{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;}
+  .srctag{background:var(--surface-high); border:1px solid var(--line); border-radius:6px;
+    padding:2px 7px; font-size:9.5px; font-weight:700; color:var(--muted);}
+
+  /* ── scène 3 · scan ─────────────────────────────────────────────── */
+  .invbox{position:relative; overflow:hidden; border-radius:14px; border:1px solid var(--line);
+    background:var(--surface-alt); padding:13px;}
+  .invline{height:7px; border-radius:3px; background:var(--surface-high); margin-bottom:6px;}
+  .invline.total{width:62%; height:9px; background:rgba(255,107,0,.28);}
+  .invname{font-family:var(--display); font-weight:700; font-size:19px; color:var(--text); margin:6px 0 9px; letter-spacing:-.3px;}
+  .scanline{position:absolute; left:0; right:0; height:46px; top:-48px;
+    background:linear-gradient(180deg, transparent, rgba(255,107,0,.4), transparent);
+    box-shadow:0 0 22px rgba(255,107,0,.5);}
+  .scene.active .scanline{animation:scan 1.4s .5s ease-in-out 2;}
+  @keyframes scan{0%{top:-48px;} 100%{top:100%;}}
+  .okstempel{position:absolute; right:-6px; top:-8px; width:46px; height:46px; background:var(--success);
+    color:#07130A; font-size:20px; font-weight:900; display:grid; place-items:center; border-radius:50%;
+    transform:scale(0); box-shadow:0 10px 26px rgba(34,197,94,.4);}
+  .scene.active .okstempel{animation:stamp .4s 3.4s cubic-bezier(.2,1.6,.4,1) forwards;}
+  @keyframes stamp{to{transform:scale(1) rotate(-9deg);}}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:10px;}
+  .fbox{background:var(--surface-alt); border:1px solid var(--line); border-radius:10px; padding:8px 10px;
+    opacity:0; transform:translateY(12px);}
+  .scene.active .fbox{animation:fin .5s cubic-bezier(.2,1.2,.4,1) both;}
+  @keyframes fin{to{opacity:1; transform:none;}}
+  .fbox .lb{font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--subtle); font-weight:800;}
+  .fbox .vl{font-family:var(--display); font-weight:700; font-size:14px; margin-top:3px; color:var(--text);}
+
+  /* ── scène 4 · tuning/gauge ─────────────────────────────────────── */
+  .gauge{position:relative; width:232px; height:141px; margin:8px auto 0;}
+  .gauge svg{width:100%; height:100%;}
+  .gv{position:absolute; left:0; right:0; bottom:16px; text-align:center; pointer-events:none;}
+  .gv b{font-family:var(--display); font-weight:700; font-size:40px; letter-spacing:-.03em; color:var(--primary);
+        text-shadow:0 2px 10px rgba(0,0,0,.6);}
+  .gv span{display:block; font-size:10px; color:var(--muted); font-weight:700; letter-spacing:.1em;}
+  .kpis{display:flex; gap:7px; margin-top:14px;}
+  .kpis div{flex:1; background:var(--surface-alt); border:1px solid var(--line); border-radius:12px;
+    padding:11px 6px; text-align:center; opacity:0; transform:translateY(12px);}
+  .scene.active .kpis div{animation:fin .5s cubic-bezier(.2,1.2,.4,1) both;}
+  .kpis b{display:block; font-family:var(--display); font-size:17px; font-weight:700; color:var(--text);}
+  .kpis span{font-size:8.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--subtle); font-weight:800;}
+
+  /* ── scène 5 · boekje ──────────────────────────────────────────── */
+  .dossier{position:relative; height:225px; margin-top:4px;}
+  .page{position:absolute; left:50%; top:8px; width:152px; height:200px; margin-left:-76px;
+    background:#F2F3F5; border-radius:9px; box-shadow:0 16px 36px rgba(0,0,0,.5); overflow:hidden;}
+  .page .ph{height:48px; background:linear-gradient(135deg, var(--primary), #C2410C);}
+  .page .ln{height:5px; border-radius:3px; background:#D5D8DE; margin:9px 12px 0;}
+  .page .ln.s{width:52%;}
+  .page .stamp{margin:12px; display:inline-block; background:rgba(34,197,94,.14); color:#15803D;
+    font-family:var(--display); font-weight:700; font-size:9px; text-transform:uppercase; letter-spacing:.07em;
+    padding:5px 8px; border-radius:7px;}
+  .scene.active .pg1{animation:fan1 .55s .45s cubic-bezier(.2,1.2,.4,1) both;}
+  .scene.active .pg2{animation:fan2 .55s .65s cubic-bezier(.2,1.2,.4,1) both;}
+  .scene.active .pg3{animation:fan3 .55s .85s cubic-bezier(.2,1.2,.4,1) both;}
+  @keyframes fan1{from{opacity:0; transform:translateY(44px) rotate(0);} to{opacity:1; transform:translate(-42px,6px) rotate(-8deg);}}
+  @keyframes fan2{from{opacity:0; transform:translateY(44px) rotate(0);} to{opacity:1; transform:translate(0,-5px) rotate(0);}}
+  @keyframes fan3{from{opacity:0; transform:translateY(44px) rotate(0);} to{opacity:1; transform:translate(42px,6px) rotate(8deg);}}
+  .sharebtn{position:absolute; right:8px; bottom:0; width:54px; height:54px; border-radius:50%;
+    background:var(--primary); color:var(--bg); font-size:22px; display:grid; place-items:center;
+    box-shadow:0 12px 30px rgba(255,107,0,.4); transform:scale(0);}
+  .scene.active .sharebtn{animation:stamp .45s 1.6s cubic-bezier(.2,1.6,.4,1) forwards;}
+  .sharepulse{position:absolute; inset:-9px; border-radius:50%; border:2px solid rgba(255,107,0,.5); opacity:0;}
+  .scene.active .sharepulse{animation:pulse 1.3s 2.2s ease-out infinite;}
+  @keyframes pulse{0%{transform:scale(.75); opacity:.85;} 100%{transform:scale(1.6); opacity:0;}}
+
+  /* ── scène 6 · download-CTA ────────────────────────────────────── */
+  .cta{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; text-align:center; opacity:0; pointer-events:none;}
+  .cta.active{opacity:1; pointer-events:auto;}
+  .ctaline{font-family:var(--display); font-weight:700; font-size:56px; line-height:1.05; letter-spacing:-.02em;
+    text-align:center; color:var(--text); text-wrap:balance;}
+  .ctaline em{font-style:normal; color:var(--primary);}
+  .ctachips{display:flex; gap:8px; margin-top:22px; flex-wrap:wrap; justify-content:center; max-width:520px;}
+  .ctachips div{font-size:11px; font-weight:700; color:var(--muted); background:var(--surface);
+    border:1px solid var(--line); padding:8px 13px; border-radius:999px; opacity:0; transform:translateY(14px);
+    white-space:nowrap;}
+  .cta.active .ctachips div{animation:up .45s both;}
+  .cta.active .ctachips div:nth-child(1){animation-delay:.25s}
+  .cta.active .ctachips div:nth-child(2){animation-delay:.4s}
+  .cta.active .ctachips div:nth-child(3){animation-delay:.55s}
+  .cta.active .ctachips div:nth-child(4){animation-delay:.7s}
+  .cta.active .ctachips div:nth-child(5){animation-delay:.85s}
+  .cta.active .ctachips div:nth-child(6){animation-delay:1s}
+  .storebtn{display:flex; gap:10px; margin-top:26px;}
+  .storebtn div{background:var(--text); color:var(--bg); font-family:var(--display); font-weight:700;
+    font-size:13.5px; padding:11px 18px; border-radius:12px; opacity:0; transform:translateY(14px);}
+  .cta.active .storebtn div{animation:up .5s 1.3s both;}
+  .cta.active .finalsub{animation:up .6s 1.6s both;}
+  .finalsub{margin-top:18px; font-size:13px; color:var(--muted);}
+  .finalsub b{color:var(--primary);}
+
+  /* ── progress + watermerk ──────────────────────────────────────── */
+  .progress{position:absolute; left:24px; right:24px; bottom:14px; height:2.5px;
+    background:rgba(255,255,255,.1); border-radius:2px;}
+  .progress span{display:block; height:100%; width:0%; background:var(--primary); border-radius:2px;}
+  .watermark{position:absolute; top:12px; left:24px; font-family:var(--display); font-weight:700;
+    font-size:11px; color:rgba(255,255,255,.28); letter-spacing:.12em; z-index:9;}
+
+  /* QA-labels (alleen zichtbaar met ?qa=1) */
+  .qa-label{position:absolute; bottom:40px; left:24px; font-size:11px; color:rgba(255,255,255,.4);
+    font-family:monospace; z-index:9; display:none;}
+  body.qa .qa-label{display:block;}
+</style>
+</head>
+<body>
+<div id="stage" class="grain">
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <div class="vignette"></div>
+  <div class="watermark">FIX50.WORKS</div>
+  <div class="qa-label" id="qalabel"></div>
+
+  <div id="fit">
+
+  <!-- ═══ scène A · hook ═══════════════════════════════════════════ -->
+  <div class="cta" id="sc-hook" data-t="0" data-d="3">
+    <p class="kicker" style="margin-bottom:14px;">Voor scooterrijders</p>
+    <h1 class="h1big">Jouw scooter start niet.<br /><em>Wat nu?</em></h1>
+    <div class="hookrow">
+      <div class="chip">🔧 Olie</div><div class="chip">⛓️ Ketting</div><div class="chip">⚡ Bougie</div>
+    </div>
+    <p class="hookproof">De app die <b>altijd weet</b> wat je scooter nodig heeft.</p>
+  </div>
+
+  <!-- ═══ scène B · home-héroschot ═════════════════════════════════ -->
+  <div class="shot scene-col" id="sc-home" data-t="3" data-d="5">
+    <div class="tapdot" style="left:47%; top:58%;"></div>
+    <div class="copyblock" style="width:560px;">
+      <div class="kicker">FIX50</div>
+      <div class="kline"></div>
+      <p class="cap" style="margin-top:14px;">Alles in één dashboard — kilometerstand, <br />onderhoud en status van je scooter.</p>
+    </div>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>9:41</span><span>📶 🔋84%</span></div>
+        <div class="appbar">
+          <span class="wordmark">Fix<b>50</b><span class="dot"></span></span>
+          <span class="appname" style="margin-left:auto;">piaggio zip 🔑</span>
+        </div>
+        <div style="padding:8px 14px 14px;">
+          <div class="card" style="padding:16px;">
+            <div class="herohead">
+              <div style="flex:1;">
+                <div class="eyebrow brand">2T · Benzine</div>
+                <div class="herotitle">Piaggio Zip SP</div>
+              </div>
+              <span class="badge neutral">In orde</span>
+            </div>
+            <div class="herogrid">
+              <div class="herocell">
+                <div class="eyebrow">Kilometerstand</div>
+                <div class="heroval"><b>12.8</b><span>km</span></div>
+                <div class="heroest">op basis van je weekgemiddelde</div>
+                <div class="hero-link">Update km</div>
+              </div>
+              <div class="herocell">
+                <div class="eyebrow">Onderhoud</div>
+                <div class="heroval"><b>7</b><span>taken</span></div>
+                <div class="hero-status"><i></i><span>Actie vereist</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card emerg">
+            <div class="ic">⚠️</div>
+            <div style="flex:1;">
+              <div class="nm">Mijn scooter start niet</div>
+              <div class="sub">Directe check: vonk, brandstof &amp; compressie</div>
+            </div>
+            <span class="chev">›</span>
+          </div>
+          <div class="card">
+            <div class="rowx">
+              <span style="font-size:15px;">🔧</span>
+              <div style="flex:1;">
+                <div class="eyebrow brand">Onderhoud nodig</div>
+                <div class="nm" style="font-family:var(--display); font-size:13px; font-weight:600; color:var(--text); margin-top:2px;">Bougie vervangen</div>
+              </div>
+              <span class="badge danger">te laat</span>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="on"><span class="ticon">🏠</span><span class="tlb">Home</span></div>
+          <div><span class="ticon">🔧</span><span class="tlb">Werkplaats</span></div>
+          <div><span class="ticon">🛠️</span><span class="tlb">Garage</span></div>
+          <div><span class="ticon">📄</span><span class="tlb">Boekje</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ scène C · noodchat ═══════════════════════════════════════ -->
+  <div class="shot scene-col" id="sc-chat" data-t="8.5" data-d="5">
+    <div class="copyblock" style="width:560px;">
+      <div class="kicker">Noodknop</div>
+      <div class="kline"></div>
+      <p class="cap" style="margin-top:14px;">Pech onderweg? De diagnose-chat geeft<br />direct hulp — met echte FIX50-kennis.</p>
+    </div>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>9:44</span><span>📶 🔋83%</span></div>
+        <div class="appbar">
+          <span class="wordmark">Fix<b>50</b></span>
+          <span class="appname" style="margin-left:auto;">Diagnose</span>
+        </div>
+        <div class="chat">
+          <div class="bubble user" style="animation-delay:.2s;">Hij springt koud niet aan 🤔</div>
+          <div class="bubble bot" style="animation-delay:.8s;"><span class="dots"><i></i><i></i><i></i></span></div>
+          <div class="tagchip" style="animation-delay:1.4s;">Antwoordt uit jouw dossier</div>
+          <div class="bubble bot" style="animation-delay:1.9s;">Pas je choke of mengsel aan? Controleer eerst of de bougie nat of droog is. Basis-regel: <b>benzine · vonk · compressie</b>.</div>
+          <div class="bubble bot" style="animation-delay:2.6s;"><div class="srcs"><span class="srctag">Start-weigert koud</span><span class="srctag">Choke</span><span class="srctag">Bougie</span></div></div>
+        </div>
+        <div class="tabbar">
+          <div><span class="ticon">🏠</span><span class="tlb">Home</span></div>
+          <div class="on" style="opacity:1;"><span class="ticon">💬</span><span class="tlb" style="color:var(--primary);">Diagnose</span></div>
+          <div><span class="ticon">🛠️</span><span class="tlb">Garage</span></div>
+          <div><span class="ticon">📄</span><span class="tlb">Boekje</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ scène D · AI factuur-scan ════════════════════════════════ -->
+  <div class="shot scene-col" id="sc-scan" data-t="13.5" data-d="5">
+    <div class="copyblock" style="width:560px;">
+      <div class="kicker">AI-FACTUUR-SCAN</div>
+      <div class="kline"></div>
+      <p class="cap" style="margin-top:14px;">Foto van je werkplaatsbon — de app zet<br />het meteen in je onderhoudsboekje.</p>
+    </div>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>9:51</span><span>📶 🔋82%</span></div>
+        <div class="appbar">
+          <span class="wordmark">Fix<b>50</b></span>
+          <span class="appname" style="margin-left:auto;">Onderhoud toevoegen</span>
+        </div>
+        <div style="padding:8px 14px 14px; display:flex; flex-direction:column; gap:9px;">
+          <div class="invbox">
+            <div class="invline" style="width:84%;"></div>
+            <div class="invline" style="width:56%;"></div>
+            <div class="invname">Werkplaats Smits · €45,20</div>
+            <div class="invline" style="width:74%;"></div>
+            <div class="invline" style="width:42%;"></div>
+            <div class="scanline"></div>
+            <div class="okstempel">✓</div>
+          </div>
+          <div class="grid2">
+            <div class="fbox" style="animation-delay:2.2s;"><div class="lb">Km-stand</div><div class="vl">12.845</div></div>
+            <div class="fbox" style="animation-delay:2.45s;"><div class="lb">Kosten</div><div class="vl">€ 45,20</div></div>
+            <div class="fbox" style="animation-delay:2.7s;"><div class="lb">Onderhoud</div><div class="vl">Oliebeurt</div></div>
+            <div class="fbox" style="animation-delay:2.95s;"><div class="lb">Datum</div><div class="vl">13-10-’26</div></div>
+          </div>
+          <div class="btn">Dan automatisch in je boekje ✓</div>
+        </div>
+        <div class="tabbar">
+          <div><span class="ticon">🏠</span><span class="tlb">Home</span></div>
+          <div class="on"><span class="ticon">🔧</span><span class="tlb">Werkplaats</span></div>
+          <div><span class="ticon">🛠️</span><span class="tlb">Garage</span></div>
+          <div><span class="ticon">📄</span><span class="tlb">Boekje</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ scène E · tuning / meting ════════════════════════════════ -->
+  <div class="shot scene-col" id="sc-tune" data-t="18.5" data-d="4">
+    <div class="copyblock" style="width:560px;">
+      <div class="kicker">TUNING &amp; METEN</div>
+      <div class="kline"></div>
+      <p class="cap" style="margin-top:14px;">Wat heeft je tuning écht opgeleverd?<br />Meet het met GPS — hard data.</p>
+    </div>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>10:02</span><span>📶 🔋79%</span></div>
+        <div class="appbar">
+          <span class="wordmark">Fix<b>50</b></span>
+          <span class="appname" style="margin-left:auto;">Tuning · Meting</span>
+        </div>
+        <div style="padding:8px 14px 14px;">
+          <div class="card">
+            <div class="eyebrow brand" style="margin-bottom:2px;">0–50 km/u sprint</div>
+            <div class="rowx" style="justify-content:space-between;">
+              <div class="stat" style="font-size:30px;">8.7<span style="font-size:12px; color:var(--muted); font-weight:400;">s</span></div>
+              <div style="text-align:right;">
+                <span class="badge danger">−0,3s vs. vorige</span>
+              </div>
+            </div>
+          </div>
+          <div class="gauge">
+            <svg viewBox="0 0 232 141">
+              <path d="M14 128 A102 102 0 0 1 218 128" fill="none" stroke="var(--surface-high)" stroke-width="13" stroke-linecap="round"/>
+              <path id="garc" d="M14 128 A102 102 0 0 1 218 128" fill="none" stroke="var(--primary)" stroke-width="13" stroke-linecap="round"
+                    stroke-dasharray="321" stroke-dashoffset="321" style="animation:garcc 1s .7s cubic-bezier(.3,1,.4,1) forwards;"/>
+              <circle cx="14" cy="128" r="7" fill="var(--primary)"/>
+              <circle cx="218" cy="128" r="7" fill="var(--surface-high)"/>
+            </svg>
+            <div class="gv"><b id="speed">0</b><span>km/h topsnelheid</span></div>
+          </div>
+          <div class="kpis">
+            <div style="animation-delay:1.7s;"><b>3</b><span>metingen</span></div>
+            <div style="animation-delay:1.95s;"><b>+6,4%</b><span>top</span></div>
+            <div style="animation-delay:2.2s;"><b>−0,3s</b><span>0–50</span></div>
+          </div>
+          <div class="card ghost" style="margin-top:12px; text-align:center; color:var(--muted); font-size:10.5px; background:var(--surface-alt); border:1px solid var(--line);">
+            rollen · veer · uitlaat — alles te vergelijken 📊
+          </div>
+        </div>
+        <div class="tabbar">
+          <div><span class="ticon">🏠</span><span class="tlb">Home</span></div>
+          <div><span class="ticon">💬</span><span class="tlb">Diagnose</span></div>
+          <div class="on"><span class="ticon">🛠️</span><span class="tlb">Garage</span></div>
+          <div><span class="ticon">📄</span><span class="tlb">Boekje</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ scène F · PDF-boekje ═════════════════════════════════════ -->
+  <div class="shot scene-col" id="sc-pdf" data-t="22.5" data-d="4">
+    <div class="copyblock" style="width:560px;">
+      <div class="kicker">ONDERHOUDSBOEKJE</div>
+      <div class="kline"></div>
+      <p class="cap" style="margin-top:14px;">Je scooter verkopen? Toon je complete<br />onderhoudsboekje als PDF in één tik.</p>
+    </div>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>10:15</span><span>📶 🔋78%</span></div>
+        <div class="appbar">
+          <span class="wordmark">Fix<b>50</b></span>
+          <span class="appname" style="margin-left:auto;">Onderhoudsboekje</span>
+        </div>
+        <div style="padding:8px 14px 14px;">
+          <div class="dossier">
+            <div class="page pg1"><div class="ph"></div><div class="ln"></div><div class="ln s"></div><div class="stamp">Onderhoud 12×</div></div>
+            <div class="page pg2"><div class="ph"></div><div class="ln"></div><div class="ln s"></div><div class="ln"></div></div>
+            <div class="page pg3"><div class="ph"></div><div class="ln"></div><div class="ln s"></div><div class="stamp">Tuning 3×</div></div>
+            <div class="sharebtn"><div class="sharepulse"></div>↗</div>
+          </div>
+          <div class="btn" style="margin-top:10px;">Delen via WhatsApp</div>
+        </div>
+        <div class="tabbar">
+          <div><span class="ticon">🏠</span><span class="tlb">Home</span></div>
+          <div><span class="ticon">💬</span><span class="tlb">Diagnose</span></div>
+          <div><span class="ticon">🛠️</span><span class="tlb">Garage</span></div>
+          <div class="on"><span class="ticon">📄</span><span class="tlb">Boekje</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ scène G · outro-cast ═════════════════════════════════════ -->
+  <div class="cta" id="sc-cta" data-t="26.5" data-d="4">
+    <p class="kicker" style="margin-bottom:14px;">Fix50</p>
+    <h1 class="ctaline">Je scooter.<br /><em>Volledig in de hand.</em></h1>
+    <div class="ctachips">
+      <div>🔧 Onderhoud</div><div>🤖 AI-scan</div><div>💬 Diagnose-chat</div>
+      <div>🛠️ Tuning</div><div>⚡ Metingen</div><div>📄 PDF-boekje</div>
+    </div>
+    <div class="storebtn">
+      <div>Download in de App Store</div>
+      <div>⬇︎ Google Play</div>
+    </div>
+    <p class="finalsub">Kosteloos je scooter bijhouden — <b>Fix50</b> denkt met je mee.</p>
+  </div>
+
+  </div><!-- /fit -->
+
+  <div class="progress"><span id="prog"></span></div>
+</div>
+
+<script>
+  // ──orrectie: 608×1080 ontwerp-canvas schalen naar viewport ──
+  const fitEl = document.getElementById('fit');
+  function fitStage(){
+    const s = Math.min(window.innerWidth / 608, window.innerHeight / 1080);
+    fitEl.style.transform = `translate(-50%, -50%) scale(${s})`;
+  }
+  fitStage();
+  window.addEventListener('resize', fitStage);
+
+  // ── scene-orkestratie ──
+  const prog = document.getElementById('prog');
+  const qalabel = document.getElementById('qalabel');
+  const SCENES = Array.from(document.querySelectorAll('[data-t]')).map((el) => ({
+    t: parseFloat(el.dataset.t), d: parseFloat(el.dataset.d), el }));
+  const LOOP = SCENES.reduce((m, s) => Math.max(m, s.t + s.d), 0);
+  let activeIdx = -1;
+  let t0 = null;
+
+  const qa = new URLSearchParams(location.search);
+  const qaT = qa.has('t') ? parseFloat(qa.get('t')) : null;
+  if (qa.has('qa')) document.body.classList.add('qa');
+
+  function setActive(i){
+    if (activeIdx === i) return;
+    SCENES.forEach((s) => s.el.classList.remove('active'));
+    if (i >= 0){
+      void SCENES[i].el.offsetWidth; // reflow → herstart animaties
+      SCENES[i].el.classList.add('active');
+    }
+    activeIdx = i;
+  }
+
+  function frame(ts){
+    fitStage(); // elke frame meenemen: viewport kan later op 0×0 starten
+    if (t0 === null) t0 = ts;
+    let t = qaT !== null ? qaT : ((ts - t0) / 1000) % LOOP;
+    if (prog) prog.style.width = ((t / LOOP) * 100).toFixed(2) + '%';
+    if (qalabel) qalabel.textContent = `scene ${activeIdx + 1} · t=${t.toFixed(1)}s`;
+    let idx = -1;
+    for (let i = 0; i < SCENES.length; i++){
+      if (t >= SCENES[i].t && t < SCENES[i].t + SCENES[i].d){ idx = i; break; }
+    }
+    setActive(idx);
+    // snelheids-teller (garage-scène)
+    const g = SCENES.find(s => s.el.id === 'sc-tune');
+    if (g && idx === SCENES.indexOf(g)){
+      const p = Math.min(1, Math.max(0, (t - g.t - 0.9) / 1.2));
+      const kmh = Math.round(4 + p * p * (63.2 - 4));
+      const el = document.getElementById('speed');
+      if (el) el.textContent = String(kmh);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>
