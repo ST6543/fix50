@@ -12,6 +12,7 @@ web-build/
 
 # desktop-build artefacten (EXE's zijn te groot voor GitHub, >100 MB-limiet)
 desktop-build/
+desktop/www/
 *.exe
 marketing/out/
 # native folders (managed workflow)
