@@ -9,6 +9,7 @@ import { Badge, Card, Eyebrow, IconTile, SectionTitle } from '@/components/ui';
 import { estimateCurrentKm, kmAnchorLabel } from '@/lib/km-estimate';
 import { SpeedChart } from '@/components/charts';
 import { FadeInView } from '@/components/motion';
+import { notifyDeterioration } from '@/services/notifications';
 import {
   ChevronRightIcon,
   GaugeIcon,
@@ -95,6 +96,9 @@ export default function HomeScreen() {
                 if (alive && texts) setAiVer(texts);
               })
               .catch(() => undefined);
+            // Fase C: push bij verslechtering — waarschuwingssignalen → in-app melding
+            // (best-effort, max 1× per week per signaal; stil bij fouten/offline).
+            notifyDeterioration(activeScooter.id, computedInsights).catch(() => undefined);
           } else {
             setWeekTasks([]);
             setForecast([]);

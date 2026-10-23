@@ -10,7 +10,7 @@
  */
 import { formatKmPerLiter, type FuelStats } from '@/services/fuel';
 import type { WeekForecastItem } from '@/services/maintenance';
-import type { PerformanceRun, UUID } from '@/types';
+import type { NotificationType, PerformanceRun, UUID } from '@/types';
 
 export type InsightSeverity = 'info' | 'let op' | 'risico';
 export type InsightKind = 'verbruik' | 'onderhoud' | 'performance' | 'tuning';
@@ -39,6 +39,10 @@ export const WINTER_FUEL_BONUS = 0.12;
 export const PERF_DROP_S = 0.3;
 /** Setup-vergelijking pas bij ≥15% verschil in gemiddelde 0–50. */
 export const SETUP_DIFF_REL = 0.15;
+/** Meet-trend vergelijk de laatste N metingen met N oudere van dezelfde setup. */
+export const RUN_TREND_COUNT = 3;
+/** Trend pas bij >0,25 s verschil tussen de twee groepen. */
+export const RUN_TREND_DIFF_S = 0.25;
 
 /**
  * Seizoenscorrectie: koud weer (dec–feb, NL) kost een brommer gemakkelijk
@@ -183,6 +187,52 @@ export function detectSetupComparison(
 }
 
 /**
+ * Meet-trend (fase C): vergelijk het gemiddelde van de laatste RUN_TREND_COUNT
+ * metingen met een gelijk aantal oudere metingen van dezelfde setup. Een enkele
+ * trage meting is al gedekt door detectPerformanceDrop (laatst vs. beste); hier
+ * gaat het om een aanhoudende trend — precies wat fase C bedoelt met
+ * "correlaties". Vestigt alleen als er minimaal 2 × RUN_TREND_COUNT geldige
+ * metingen zijn, zodat de richting niet op ruis berust.
+ */
+export function detectRunTrend(
+  runs: PerformanceRun[],
+  setupNames: Record<UUID, string> = {},
+): Insight | null {
+  const groups = new Map<UUID, { t: PerformanceRun[] }>();
+  for (const r of runs) {
+    if (r.t0_50_s === null || r.setup_id === null) continue;
+    const g = groups.get(r.setup_id) ?? { t: [] };
+    g.t.push(r);
+    groups.set(r.setup_id, g);
+  }
+
+  let worst: { setupId: UUID; diffS: number; n: number } | null = null;
+  for (const [setupId, { t }] of groups) {
+    if (t.length < RUN_TREND_COUNT * 2) continue;
+    const ordered = [...t].sort((a, b) => a.started_at.localeCompare(b.started_at));
+    const n = RUN_TREND_COUNT;
+    const older = ordered.slice(0, n);
+    const recent = ordered.slice(-n);
+    const avgOf = (rs: PerformanceRun[]) => rs.reduce((s, r) => s + (r.t0_50_s ?? 0), 0) / rs.length;
+    const diff = avgOf(recent) - avgOf(older);
+    if (diff > RUN_TREND_DIFF_S && (!worst || diff > worst.diffS)) {
+      worst = { setupId, diffS: diff, n };
+    }
+  }
+  if (!worst) return null;
+
+  const name = setupNames[worst.setupId] ?? 'je actieve setup';
+  const pct = Math.round((worst.diffS / (worst.diffS + 2)) * 100);
+  return {
+    kind: 'performance',
+    severity: 'let op',
+    title: 'Metingen worden consistently trager',
+    detail: `Gemiddeld over de laatste ${worst.n} metingen met ${name} rij je ${worst.diffS.toFixed(2).replace('.', ',')} s trager dan daarvoor. Dat is een trend, geen losse uitglijer — vaak voorkomende oorzaak: versleten koppelingsrollen of bandenspanning.`,
+    evidence: `trend +${worst.diffS.toFixed(2).replace('.', ',')} s · ${worst.n} metingen per groep`,
+  };
+}
+
+/**
  * Prestatie-daling: de laatste meting van een setup trager dan de beste
  * meting van diezelfde setup (met ≥0,3 s verschil).
  */
@@ -256,6 +306,38 @@ export function applyAiVerwoording(
   });
 }
 
+/**
+ * Fase C-push-mapping: van een waarschuwingssignaal naar een in-app
+ * melding. De `weekKey` zorgt dat een aanhoudend probleem maximaal één keer
+ * per week opnieuw meldt (de dedupe-index in de database filtert de rest).
+ * Alleen 'let op'/'risico'-signalen worden gemeld — info-signalen staan al
+ * op de Home-kaart en pushen zonder actie zou ruis zijn.
+ */
+export function insightToNotificationPayload(
+  insight: Insight,
+  weekKey: string,
+): { type: NotificationType; title: string; body: string; dedupe_key: string } | null {
+  if (insight.severity === 'info') return null;
+  const type: NotificationType =
+    insight.kind === 'onderhoud' ? 'maintenance' : insight.kind === 'verbruik' ? 'warning' : 'performance';
+  return {
+    type,
+    title: insight.title,
+    body: insight.detail,
+    dedupe_key: `sig:${insight.kind}:${insight.title}:${weekKey}`,
+  };
+}
+
+/** ISO-weeksleutel (`2026-W42`) voor de wekelijkse re-meldlimiet. */
+export function isoWeekKey(d = new Date()): string {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - dayNum);
+  const start = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t.getTime() - start.getTime()) / 86_400_000 + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
 /** Alle signalen gebundeld, urgentste eerst. */
 export function buildInsights(input: {
   fuel: FuelStats | null;
@@ -272,6 +354,8 @@ export function buildInsights(input: {
   }
   const drop = detectPerformanceDrop(input.runs, input.setupNames);
   if (drop) insights.push(drop);
+  const runTrend = detectRunTrend(input.runs, input.setupNames);
+  if (runTrend) insights.push(runTrend);
   const comparison = detectSetupComparison(input.runs, input.setupNames);
   if (comparison) insights.push(comparison);
   return insights.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);

@@ -4,7 +4,11 @@ import {
   detectFuelTrend,
   detectOverdueMaintenance,
   detectPerformanceDrop,
+  detectRunTrend,
   detectSetupComparison,
+  insightToNotificationPayload,
+  isoWeekKey,
+  type Insight,
 } from '../src/lib/insights';
 import { computeFuelStats } from '../src/services/fuel';
 import type { WeekForecastItem } from '../src/services/maintenance';
@@ -211,3 +215,110 @@ describe('buildInsights', () => {
     expect(buildInsights({ fuel: null, forecast: [], runs: [] })).toEqual([]);
   });
 });
+
+describe('detectRunTrend (fase C: meet-trends)', () => {
+  it('signaleert een aanhoudende verslechtering pas na 3+3 metingen', () => {
+    // Ouder: 3× rond 7,0 s; recent: 3× rond 7,6 s → trend +0,6 s > 0,25 s.
+    const runs = [
+      makeRun({ id: '1', setup_id: 'sport', started_at: '2026-08-01T10:00:00.000Z', t0_50_s: 7.0 }),
+      makeRun({ id: '2', setup_id: 'sport', started_at: '2026-08-10T10:00:00.000Z', t0_50_s: 7.05 }),
+      makeRun({ id: '3', setup_id: 'sport', started_at: '2026-08-20T10:00:00.000Z', t0_50_s: 6.95 }),
+      makeRun({ id: '4', setup_id: 'sport', started_at: '2026-09-01T10:00:00.000Z', t0_50_s: 7.6 }),
+      makeRun({ id: '5', setup_id: 'sport', started_at: '2026-09-08T10:00:00.000Z', t0_50_s: 7.55 }),
+      makeRun({ id: '6', setup_id: 'sport', started_at: '2026-09-15T10:00:00.000Z', t0_50_s: 7.65 }),
+    ];
+    const insight = detectRunTrend(runs, { sport: 'Sport' });
+    expect(insight).not.toBeNull();
+    expect(insight!.kind).toBe('performance');
+    expect(insight!.severity).toBe('let op');
+    expect(insight!.title).toBe('Metingen worden consistently trager');
+    expect(insight!.evidence).toContain('+0,60');
+  });
+
+  it('zwijgt bij wisselende metingen (ruis) en te weinig data', () => {
+    // 2 metingen per richting is te mager — trend vereist 3+3.
+    expect(
+      detectRunTrend([
+        makeRun({ id: '1', setup_id: 'a', started_at: '2026-08-01T10:00:00.000Z', t0_50_s: 7.0 }),
+        makeRun({ id: '2', setup_id: 'a', started_at: '2026-08-10T10:00:00.000Z', t0_50_s: 7.0 }),
+        makeRun({ id: '3', setup_id: 'a', started_at: '2026-09-01T10:00:00.000Z', t0_50_s: 7.8 }),
+        makeRun({ id: '4', setup_id: 'a', started_at: '2026-09-10T10:00:00.000Z', t0_50_s: 7.8 }),
+      ]),
+    ).toBeNull();
+    // Ruis: hoog-laag-hoog-laag laat de groepsgemiddelden plat vallen.
+    expect(
+      detectRunTrend([
+        makeRun({ id: '1', setup_id: 'a', started_at: '2026-08-01T10:00:00.000Z', t0_50_s: 7.4 }),
+        makeRun({ id: '2', setup_id: 'a', started_at: '2026-08-10T10:00:00.000Z', t0_50_s: 7.0 }),
+        makeRun({ id: '3', setup_id: 'a', started_at: '2026-08-20T10:00:00.000Z', t0_50_s: 7.5 }),
+        makeRun({ id: '4', setup_id: 'a', started_at: '2026-09-01T10:00:00.000Z', t0_50_s: 7.0 }),
+        makeRun({ id: '5', setup_id: 'a', started_at: '2026-09-08T10:00:00.000Z', t0_50_s: 7.5 }),
+        makeRun({ id: '6', setup_id: 'a', started_at: '2026-09-15T10:00:00.000Z', t0_50_s: 7.05 }),
+      ]),
+    ).toBeNull();
+  });
+
+  it('kijkt per setup en meldt alleen de groep die echt trager wordt', () => {
+    const runs = [
+      // Sport: stabiel (geen trend).
+      makeRun({ id: '1', setup_id: 'sport', started_at: '2026-08-01T10:00:00.000Z', t0_50_s: 6.5 }),
+      makeRun({ id: '2', setup_id: 'sport', started_at: '2026-08-10T10:00:00.000Z', t0_50_s: 6.6 }),
+      makeRun({ id: '3', setup_id: 'sport', started_at: '2026-08-20T10:00:00.000Z', t0_50_s: 6.4 }),
+      makeRun({ id: '4', setup_id: 'sport', started_at: '2026-09-05T10:00:00.000Z', t0_50_s: 6.7 }),
+      makeRun({ id: '5', setup_id: 'sport', started_at: '2026-09-12T10:00:00.000Z', t0_50_s: 6.5 }),
+      makeRun({ id: '6', setup_id: 'sport', started_at: '2026-09-19T10:00:00.000Z', t0_50_s: 6.55 }),
+      // Origineel: verslechtert helder.
+      makeRun({ id: '7', setup_id: 'orig', started_at: '2026-08-01T11:00:00.000Z', t0_50_s: 8.0 }),
+      makeRun({ id: '8', setup_id: 'orig', started_at: '2026-08-10T11:00:00.000Z', t0_50_s: 8.05 }),
+      makeRun({ id: '9', setup_id: 'orig', started_at: '2026-08-20T11:00:00.000Z', t0_50_s: 7.95 }),
+      makeRun({ id: '10', setup_id: 'orig', started_at: '2026-09-05T11:00:00.000Z', t0_50_s: 8.6 }),
+      makeRun({ id: '11', setup_id: 'orig', started_at: '2026-09-12T11:00:00.000Z', t0_50_s: 8.65 }),
+      makeRun({ id: '12', setup_id: 'orig', started_at: '2026-09-19T11:00:00.000Z', t0_50_s: 8.6 }),
+    ];
+    const insight = detectRunTrend(runs, { sport: 'Sport', orig: 'Origineel' });
+    expect(insight!.detail).toContain('Origineel');
+  });
+});
+
+describe('insightToNotificationPayload (fase C: push bij verslechtering)', () => {
+  it('mapt waarschuwingen naar melding-typen met een stabiele dedupe-key', () => {
+    const week = '2026-W42';
+    const verbruik: Insight = {
+      kind: 'verbruik', severity: 'let op', title: 'Verbruik verslechterd',
+      detail: 'd', evidence: 'e',
+    };
+    const onderhoud: Insight = {
+      kind: 'onderhoud', severity: 'risico', title: '2 onderhoudstaken te laat',
+      detail: 'd', evidence: 'e',
+    };
+    const perf: Insight = {
+      kind: 'performance', severity: 'let op', title: 'Trager dan je beste meting',
+      detail: 'd', evidence: 'e',
+    };
+
+    const p1 = insightToNotificationPayload(verbruik, week);
+    expect(p1?.type).toBe('warning');
+    expect(p1?.dedupe_key).toBe('sig:verbruik:Verbruik verslechterd:2026-W42');
+
+    expect(insightToNotificationPayload(onderhoud, week)?.type).toBe('maintenance');
+    expect(insightToNotificationPayload(perf, week)?.type).toBe('performance');
+
+    // Stevige tekst komt 1-op-1 als body in de melding.
+    expect(p1?.body).toBe('d');
+  });
+
+  it('pusht info-signalen nooit', () => {
+    expect(
+      insightToNotificationPayload(
+        { kind: 'tuning', severity: 'info', title: 'Sneller met Sport', detail: 'd', evidence: 'e' },
+        '2026-W42',
+      ),
+    ).toBeNull();
+  });
+
+  it('isoWeekKey geeft een stabiele ISO-week per datum', () => {
+    expect(isoWeekKey(new Date(Date.UTC(2026, 0, 2)))).toBe('2026-W01');
+    expect(isoWeekKey(new Date(Date.UTC(2026, 0, 1)))).toBe('2026-W01'); // donderdag = week 1
+    expect(isoWeekKey(new Date(Date.UTC(2026, 11, 28)))).toBe('2026-W53'); // 2026 telt 53 ISO-weken
+  });
+});;

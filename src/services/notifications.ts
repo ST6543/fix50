@@ -9,6 +9,11 @@ import { Platform } from 'react-native';
 
 import { query } from './api';
 import { supabase } from '@/lib/supabase';
+import {
+  insightToNotificationPayload,
+  isoWeekKey,
+  type Insight,
+} from '@/lib/insights';
 import type { AppNotification } from '@/types';
 
 /** Dynamisch de notifications-module laden; null als dat niet kan. */
@@ -127,4 +132,57 @@ export async function getUserSettings() {
 
 export async function updateUserSettings(patch: Record<string, unknown>): Promise<void> {
   await query<void>(() => supabase.from('user_settings').update(patch));
+}
+
+/**
+ * Push bij verslechtering (fase C van het AI-plan): zet waarschuwingssignalen
+ * ('let op'/'risico') om in in-app meldingen. Guardrails:
+ * - info-signalen pushen nooit (die staan al op de Home-kaart);
+ * - de gebruikersinstellingen tellen mee: onderhoudssignalen volgen
+ *   `maintenance_notifications`, de rest volgt `push_enabled`;
+ * - melding dtypeen maximaal één keer per week per signaal (dedupe_key);
+ * - fouten zijn stil: dit is best-effort, Home blijft altijd werken.
+ */
+export async function notifyDeterioration(
+  scooterId: string | null,
+  insights: Insight[],
+): Promise<number> {
+  const payloads = insights
+    .map((ins) => insightToNotificationPayload(ins, isoWeekKey()))
+    .filter((p): p is NonNullable<ReturnType<typeof insightToNotificationPayload>> => p !== null);
+  if (payloads.length === 0) return 0;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  // Instellingen (best-effort; null ≡ standaard aan).
+  const { data: settings } = await supabase
+    .from('user_settings')
+    .select('push_enabled, maintenance_notifications')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  const s = (settings as { push_enabled?: boolean; maintenance_notifications?: boolean } | null) ?? null;
+  const allowed = (kind: Insight['kind']): boolean =>
+    kind === 'onderhoud' ? s?.maintenance_notifications !== false : s?.push_enabled !== false;
+
+  const rows = payloads
+    .filter((p, i) => allowed(insights[i]!.kind))
+    .map((p) => ({ user_id: user.id, scooter_id: scooterId, ...p }));
+  if (rows.length === 0) return 0;
+
+  // Bestaande keys overslaan (dedupe-index is expressie-gebaseerd, dus geen onConflict).
+  const keys = rows.map((r) => r.dedupe_key);
+  const { data: existing } = await supabase
+    .from('notifications')
+    .select('dedupe_key')
+    .in('dedupe_key', keys);
+  const seen = new Set((existing ?? []).map((e: { dedupe_key: string }) => e.dedupe_key));
+  const fresh = rows.filter((r) => !seen.has(r.dedupe_key));
+  if (fresh.length === 0) return 0;
+
+  const { error } = await supabase.from('notifications').insert(fresh);
+  if (error) return 0; // stil: best-effort
+  return fresh.length;
 }
