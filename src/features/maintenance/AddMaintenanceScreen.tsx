@@ -13,6 +13,7 @@ import { useScooters } from '@/hooks/useScooters';
 import { listMaintenanceItems, registerMaintenance } from '@/services/maintenance';
 import * as scootersService from '@/services/scooters';
 import { scanInvoice, type InvoiceSuggestion } from '@/services/invoice-scan';
+import { shrinkForScan } from '@/lib/image-shrink';
 import { euroSchema, eurosToCents, kmUpdateSchema } from '@/lib/validation';
 import { base64ToBytes, detectImageMime } from '@/lib/base64';
 import { colors, spacing } from '@/theme';
@@ -40,43 +41,7 @@ export default function AddMaintenanceScreen() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [scannedPreview, setScannedPreview] = useState<string | null>(null);
 
-  /**
-   * Scan-foto verkleinen vóór verzending: houdt het verzoek ver onder de
-   * Edge-Function-limiet (8 MB) én ruim binnen de AI-timeout. Max 1400 px
-   * langste zijde, JPEG q0,7. Mislukt het verkleinen, dan gaan we door met
-   * de originele foto — scannen blijft dan gewoon geprobeerd.
-   */
-  async function shrinkForScan(asset: ImagePicker.ImagePickerAsset): Promise<{ base64: string; mime: string }> {
-    const origBase64 = asset.base64;
-    if (!origBase64) throw new Error('Foto bevat geen data.');
-    const original = { base64: origBase64, mime: asset.mimeType ?? detectImageMime(base64ToBytes(origBase64)) };
-    const big = (asset.width ?? 0) > 1400 || (asset.height ?? 0) > 1400;
-    if (!big) return original;
-    try {
-      const w = asset.width ?? 0;
-      const h = asset.height ?? 0;
-      const scale = 1400 / Math.max(w, h);
-      const ctx = ImageManipulator.ImageManipulator.manipulate(asset.uri).resize({
-        width: Math.round(w * scale),
-        height: Math.round(h * scale),
-      });
-      const ref = await ctx.renderAsync();
-      const saved = await ref.saveAsync({
-        compress: 0.7,
-        format: ImageManipulator.SaveFormat.JPEG,
-        base64: true,
-      });
-      if (saved.base64) {
-        return { base64: saved.base64, mime: 'image/jpeg' };
-      }
-      return original;
-    } catch (err) {
-      console.log('[scan] Verkleinen mislukt, origineel gebruikt:', err instanceof Error ? err.message : err);
-      return original;
-    }
-  }
-
-  /** Foto maken/kiezen en direct naar de scan-stap. */
+  /** Foto maken/kiezen en direct naar de scan-stap (verkleinen via lib/image-shrink). */
   async function handleScan(source: 'camera' | 'library') {
     setScanError(null);
     setScanInfo(null);

@@ -4,7 +4,13 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native
 import { useFocusEffect } from '@react-navigation/native';
 
 import { Badge, Button, Card, EmptyState, ErrorText, IconTile, Input } from '@/components/ui';
-import { DropletIcon, PlusIcon, SendIcon } from '@/components/icons';
+import { CameraIcon, DropletIcon, ImageIcon, PlusIcon, SendIcon } from '@/components/icons';
+import * as ImagePicker from 'expo-image-picker';
+import { shrinkForScan } from '@/lib/image-shrink';
+import {
+  isPlausibleOdometerScan,
+  scanOdometer,
+} from '@/services/odometer-scan';
 import { TrendChart } from '@/components/charts';
 import { shareFuelLog } from '@/lib/export';
 import { useScooters } from '@/hooks/useScooters';
@@ -26,6 +32,59 @@ export default function FuelScreen() {
   const [station, setStation] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // ── Teller-scan (fase D): foto van de km-stand → prefill ──────────────
+  const [kmScanBusy, setKmScanBusy] = useState(false);
+  const [kmScanNote, setKmScanNote] = useState<string | null>(null);
+
+  async function handleOdometerScan(source: 'camera' | 'library') {
+    setKmScanNote(null);
+    const perm =
+      source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setKmScanNote("Geen toestemming voor camera/foto's — zet dit aan in de instellingen.");
+      return;
+    }
+    const result =
+      source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ quality: 0.7, base64: true, exif: false })
+        : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, base64: true, exif: false });
+    if (result.canceled || !result.assets[0]?.base64) return;
+
+    setKmScanBusy(true);
+    try {
+      const shrunk = await shrinkForScan(result.assets[0]);
+      const out = await scanOdometer({
+        base64: shrunk.base64,
+        mime: shrunk.mime,
+        scooterId: scooter.id,
+        currentKm: scooter.current_km,
+      });
+      if (!out.found || out.km === null) {
+        setKmScanNote(out.warning ?? 'Geen leesbare kilometerstand gevonden op deze foto.');
+        return;
+      }
+      setOdometer(String(out.km));
+      // Guardrail uit het plan: de gebruiker houdt de regie — bij twijfel
+      // alleen noteren, nooit stil wegschrijven of blokkeren.
+      if (out.warning) setKmScanNote(out.warning);
+      else if (!isPlausibleOdometerScan(out.km, scooter.current_km)) {
+        setKmScanNote(
+          `${out.km} km leest lager dan je laatst bekende stand — controleer of de foto recent is.`,
+        );
+      } else if (out.confidence === 'laag') {
+        setKmScanNote(`Afgelezen: ${out.km} km (lage zekerheid — check de cijfers).`);
+      } else {
+        setKmScanNote(`Afgelezen: ${out.km} km — check of het klopt.`);
+      }
+    } catch (err) {
+      setKmScanNote(err instanceof Error ? err.message : 'Teller scannen mislukt. Probeer het opnieuw.');
+    } finally {
+      setKmScanBusy(false);
+    }
+  }
 
   const reload = useCallback(() => {
     if (!activeScooter) {
@@ -192,6 +251,23 @@ export default function FuelScreen() {
           {/* Invoerformulier */}
           {formOpen ? (
             <Card style={styles.formCard}>
+              {/* Teller-scan: foto van de kilometerstand vult het km-veld (fase D). */}
+              <Button
+                label="Foto van km-stand"
+                icon={<CameraIcon size={16} color={colors.onPrimary} />}
+                onPress={() => handleOdometerScan('camera')}
+                loading={kmScanBusy}
+                style={styles.scanBtn}
+              />
+              {kmScanBusy ? (
+                <Text style={styles.scanNote}>Teller wordt uitgelezen…</Text>
+              ) : kmScanNote ? (
+                <Text style={styles.scanNote}>{kmScanNote}</Text>
+              ) : (
+                <Text style={styles.scanHint}>
+                  Of kies een foto van je teller — we lezen de stand automatisch in.
+                </Text>
+              )}
               <View style={styles.formRow}>
                 <View style={{ flex: 1 }}>
                   <Input
@@ -316,6 +392,9 @@ const styles = StyleSheet.create({
   formCard: { marginBottom: spacing.m },
   formRow: { flexDirection: 'row', gap: spacing.s },
   formActions: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.xs },
+  scanBtn: { marginTop: spacing.xs },
+  scanNote: { color: colors.textSubtle, fontFamily: fonts.body, fontSize: 12, marginTop: 6 },
+  scanHint: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 11.5, marginTop: 4 },
   listHeader: { ...typography.eyebrow, marginBottom: spacing.s },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.m, marginBottom: spacing.m },
   rowTitle: { color: colors.text, fontFamily: fonts.display, fontSize: 14.5, fontWeight: '600' },
