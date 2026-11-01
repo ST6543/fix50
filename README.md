@@ -56,12 +56,12 @@ src/
   theme/           # Donker thema, oranje accent (#F97316)
 supabase/
   migrations/      # 7 migrations (schema t/m cron + kosten/tankbeurten)
-  functions/       # diagnose-chat, maintenance-reminders, register-push-token
+  functions/       # diagnose-chat, ai-insights, insights-cron, maintenance-reminders, register-push-token, scan-invoice, scan-odometer, verify, delete-account
 scripts/
   lib/parse-excel.ts   # Excel → rijen (idempotent via content_hash)
   import-diagnosis.ts  # Import: API-modus of SQL-dump
-tests/             # 9 Jest-suites (95 tests)
-docs/              # Onderzoeks- en plandocumenten (o.a. AI-SLIMMER-PLAN.md)
+tests/             # 11 Jest-suites (123 tests)
+docs/              # Onderzoeks- en plandocumenten (o.a. AI-SLIMMER-PLAN.md, release-checklist.md)
 src/lib/insights.ts # Slimme signalen (fase A van het AI-plan)
 ```
 
@@ -220,10 +220,12 @@ Die link werkt overal (ook buiten je eigen wifi) en blijft gelijk: opnieuw deplo
 
 ## 8. Deployment-checklist
 
+> Voor een desktop-release (EXE bouwen → GitHub-release) is een aparte vaste procedure: [docs/release-checklist.md](docs/release-checklist.md).
+
 - [ ] `supabase db push` → migrations staan op het project (incl. kosten/tankbeurten)
 - [ ] `pg_net`-extensie enabled, cron-migratie gecontroleerd
 - [ ] `npm run import:diagnosis` → 464 entries + 26 items in de database
-- [ ] 4 Edge Functions gedeployed
+- [ ] 10 Edge Functions gedeployed
 - [ ] `supabase secrets set AI_API_KEY … CRON_SECRET …` + vault-secret
 - [ ] `.env` gevuld met publishable key → `npm start` werkt
 - [ ] Test-chat gestuurd → antwoord citeert FIX50-data (check metadata `diagnosis_ids` in het bericht)
