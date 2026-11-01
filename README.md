@@ -1,5 +1,20 @@
 # FIX50 🛵
 
+## 📲 App installeren (Windows)
+
+1. Download de laatste versie: **[FIX50.exe](https://github.com/ST6543/fix50/releases/latest/download/FIX50.exe)** (~219 MB).
+2. Dubbelklik op het bestand — **geen installatie nodig**.
+3. Bij de eerste start kan Windows waarschuwen ("Windows heeft je pc beveiligd"): kies **Meer info → Toch uitvoeren**. Dit komt doordat de app geen betaald certificaat gebruikt; het bestand is veilig.
+4. De allereerste start duurt enkele seconden (de app pakt zichzelf uit), daarna start hij normaal.
+5. In de app: kies **Registreren** en maak je eigen account aan (met e-mail + wachtwoord of alleen een gebruikersnaam). Je data is privé per account.
+
+De app werkt op elke laptop/pc met internet — backend, AI en herinneringen draaien allemaal in de cloud, dus je netwerk maakt niet uit.
+
+> Vraagjes of hij start niet op? Stuur een berichtje.
+
+<details>
+<summary>🧑‍💻 Voor ontwikkelaars (source, build, tests)</summary>
+
 Dé app voor brommer- en scooterrijders: AI-diagnose in gewone taal, onderhoudsbeheer met herinneringen, kostenregistratie en tankbeurt-log, tuning-setup-registratie en GPS-prestatiemeting — met de diagnose-database (464 entries, 11 bloktypes) als bron van waarheid.
 
 > **Kernprincipe:** de database is de kennislaag, de AI is de redeneerlaag, de Edge Function is de beveiligde tussenlaag. De AI verzint géén diagnoses; zonder relevante FIX50-data zegt de chatbot dat eerlijk.
@@ -52,7 +67,7 @@ src/lib/insights.ts # Slimme signalen (fase A van het AI-plan)
 
 ---
 
-## 1. Installatie
+## 1. Ontwikkelinstallatie
 
 ```bash
 npm install
@@ -234,3 +249,5 @@ Die link werkt overal (ook buiten je eigen wifi) en blijft gelijk: opnieuw deplo
 - Edge Function `diagnose-chat` authenticeert via `auth.getUser`, checkt scooter-eigenaarschap, limietereert AI-gebruik (60/dag/gebruiker) en slaat berichten op vóór de AI-call.
 - Cron-endpoint vereist `CRON_SECRET` als Bearer-token.
 - Service key staat alleen lokaal in `.env` (ge-gitignoreerd) voor de import.
+
+</details>
