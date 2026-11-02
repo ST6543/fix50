@@ -6,6 +6,7 @@ import Svg, { Line, Polyline, Rect } from 'react-native-svg';
 
 import { Badge, Button, Card, Chip, ChipRow } from '@/components/ui';
 import { useScooters } from '@/hooks/useScooters';
+import * as tuningService from '@/services/tuning';
 import { ENGINE_BLOCKS, findBlockFromText } from '@/data/engineBlocks';
 import { colors, fonts, radii, spacing } from '@/theme';
 import {
@@ -28,6 +29,10 @@ import {
   type CarbSetupType,
   type CvtState,
   type Cooling,
+  CHAIN_SPROCKET_PRESETS,
+  calculateChainRatio,
+  GEARING_RULES,
+  PRIMARY_GEAR_INFO,
 } from '@/lib/afstel';
 
 const CC_OPTIONS = [50, 65, 70, 80];
@@ -141,8 +146,9 @@ function Stepper({ label, value, unit, hint, onDec, onInc, step }: {
 }
 
 export default function AfstelScreen({ embedded = false }: { embedded?: boolean }) {
-  const { setup } = useScooters();
-  const [tab, setTab] = useState<'carb' | 'cvt'>('carb');
+  const { setup, activeScooter } = useScooters();
+  const [tab, setTab] = useState<'carb' | 'cvt' | 'gear'>('carb');
+  const tabSnapshot = tab as 'carb' | 'cvt' | 'gear';
 
   // ── Carburateur-state (pre-filled vanuit de scooter-setup) ──
   const [cc, setCc] = useState<number>(() => (setup?.cilinderinhoud_cc ? closeOption<number>(setup.cilinderinhoud_cc, CC_OPTIONS) : 70));
@@ -154,6 +160,10 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const [cooling, setCooling] = useState<Cooling>(() => ((setup?.bloktype ?? '').toLowerCase().includes('water') ? 'LC' : 'AC'));
   const [blockId, setBlockId] = useState<string>(() => findBlockFromText(setup?.bloktype)?.id ?? 'onbekend');
   const [diagId, setDiagId] = useState<string | null>(null);
+  const [gearFront, setGearFront] = useState(11);
+  const [gearRear, setGearRear] = useState(47);
+  const [gearPresetId, setGearPresetId] = useState<string | null>(null);
+  const [logNote, setLogNote] = useState<string | null>(null);
 
   const block = ENGINE_BLOCKS.find((b) => b.id === blockId) ?? null;
   const carb = useMemo(
@@ -181,6 +191,72 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const userDiag = useMemo(() => diagnoseCvtSymptoms(cvt, symptoms), [cvt, symptoms]);
   const suggestedModel = useMemo(() => calculateCvt(userDiag.suggested), [userDiag]);
 
+  const gearPreset = CHAIN_SPROCKET_PRESETS.find((x) => x.id === gearPresetId) ?? null;
+  const gearing = useMemo(
+    () => calculateChainRatio(gearFront, gearRear, gearPreset ? gearPreset.rear / gearPreset.front : undefined),
+    [gearFront, gearRear, gearPreset],
+  );
+  const isShakeBlock = block?.transmission === 'schakel';
+
+  // Opslaan in de tuninggeschiedenis (tuning_changes).
+  const saveCarbAdvice = async () => {
+    if (!activeScooter) return;
+    try {
+      await tuningService.addChange({
+        scooterId: activeScooter.id,
+        part: 'Afstelhulp: startafstelling',
+        newValue: `${cc}cc ${carbMm}mm · sproeier ${carb.jetLow}-${carb.jetHigh} · clip ${carb.clip} · ${carb.plug ?? `hittegraad ${carb.heat}`}`,
+        result: `Powerband-richtpunt ±${carb.powerbandRpm} rpm`,
+        notes: [block?.label, CARB_SETUP_LABELS[setupType], cooling, material].filter(Boolean).join(' · '),
+      });
+      setLogNote('Startafstelling opgeslagen in de tuninggeschiedenis.');
+    } catch {
+      setLogNote('Opslaan mislukt — controleer of je een actieve scooter hebt.');
+    }
+  };
+
+  const saveGear = async () => {
+    if (!activeScooter) return;
+    try {
+      await tuningService.addChange({
+        scooterId: activeScooter.id,
+        part: 'Vertanding (ketting)',
+        newValue: `${gearFront}/${gearRear} = ${gearing.ratio.toFixed(2)}`,
+        result: gearing.deltaPct === null ? null : `${gearing.deltaPct > 0 ? '+' : ''}${gearing.deltaPct}% t.o.v. referentie`,
+        notes: gearPreset?.label ?? null,
+      });
+      setLogNote('Vertanding opgeslagen in de tuninggeschiedenis.');
+    } catch {
+      setLogNote('Opslaan mislukt — controleer of je een actieve scooter hebt.');
+    }
+  };
+
+  const applyCvtSuggestion = async () => {
+    const next = userDiag.suggested;
+    if (activeScooter) {
+      const rows: [string, string, string][] = [];
+      if (next.roller !== cvt.roller) rows.push(['Rollen', `${cvt.roller}g`, `${next.roller}g`]);
+      if (next.springIndex !== cvt.springIndex) rows.push(['Drukveer', cvtSpringLabel(cvt.springIndex), cvtSpringLabel(next.springIndex)]);
+      if (next.belt !== cvt.belt) rows.push(['V-snaar', `${cvt.belt}mm`, `${next.belt}mm`]);
+      if (next.clutch !== cvt.clutch) rows.push(['Trekveren (aangrijpen)', cvtClutchLabel(cvt.clutch), cvtClutchLabel(next.clutch)]);
+      try {
+        for (const [part, oldValue, newValue] of rows) {
+          await tuningService.addChange({
+            scooterId: activeScooter.id,
+            part,
+            oldValue,
+            newValue,
+            result: 'Toegepast via Afstelhulp-suggestie',
+          });
+        }
+        if (rows.length > 0) setLogNote(`${rows.length} afstelwijziging(en) opgeslagen in de tuninggeschiedenis.`);
+      } catch {
+        // Loggen mag de suggestie nooit in de weg zitten.
+      }
+    }
+    setCvt(next);
+  };
+
   const applyPreset = (i: number) => {
     const p = CVT_ENGINE_PRESETS[i]!;
     setCvt((s) => ({ ...s, pbMin: p.min, pbMax: p.max }));
@@ -197,10 +273,15 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
               <Chip label="Carburateur" active={tab === 'carb'} onPress={() => setTab('carb')} />
             </Pressable>
             <Pressable accessibilityLabel="CVT en variateur afstellen" onPress={() => setTab('cvt')}>
-              <Chip label="CVT / Tandwielen" active={tab === 'cvt'} onPress={() => setTab('cvt')} />
+              <Chip label={isShakeBlock ? 'Vertanding' : 'CVT / Tandwielen'} active={isShakeBlock ? tab === 'gear' : tab === 'cvt'} onPress={() => setTab(isShakeBlock ? 'gear' : 'cvt')} />
             </Pressable>
           </View>
         </Card>
+        {logNote ? (
+          <Card style={styles.logNoteCard}>
+            <Text style={styles.logNote}>{logNote}</Text>
+          </Card>
+        ) : null}
 
         {tab === 'carb' ? (
           <>
@@ -209,7 +290,12 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
               <Text style={styles.label}>Motor / blok</Text>
               <ChipRow>
                 {ENGINE_BLOCKS.map((b) => (
-                  <Chip key={b.id} label={b.label} active={blockId === b.id} onPress={() => setBlockId(b.id)} />
+                  <Chip key={b.id} label={b.label} active={blockId === b.id} onPress={() => {
+                    setBlockId(b.id);
+                    const nb = ENGINE_BLOCKS.find((x) => x.id === b.id);
+                    if (nb?.transmission === 'schakel' && tabSnapshot === 'cvt') setTab('gear');
+                    if (nb && nb.transmission !== 'schakel' && tabSnapshot === 'gear') setTab('cvt');
+                  }} />
                 ))}
                 <Chip label="Custom / onbekend" active={blockId === 'onbekend'} onPress={() => setBlockId('onbekend')} />
               </ChipRow>
@@ -297,6 +383,7 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 Stop direct bij pingelen, wit/grijze bougie, hoge temperatuur of toeren die blijven hangen. Controleer
                 eerst op valse lucht voordat je sproeiers blijft wisselen.
               </Text>
+              <Button label="Startafstelling opslaan in tuninggeschiedenis" variant="secondary" onPress={saveCarbAdvice} />
             </Card>
 
             <NumberedHeader n="3" title="AFSTELKAART PER GASSTAND" subtitle="Zie direct welk onderdeel bij welke gasstand de meeste invloed heeft." />
@@ -349,7 +436,7 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
               )}
             </Card>
           </>
-        ) : (
+        ) : tab === 'cvt' && !isShakeBlock ? (
           <>
             <NumberedHeader n="1" title="EERST: WELK TYPE OVERBRENGING?" subtitle="Snaarlengte hoort bij het cartertype." />
             <Card>
@@ -509,10 +596,74 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                       </View>
                     );
                   })}
-                  <Button label="Suggestie toepassen" onPress={() => setCvt(userDiag.suggested)} />
+                  <Button label="Suggestie toepassen" onPress={applyCvtSuggestion} />
                   <Text style={styles.hint}>Suggestie uitvoeren levert ±{cvtSpeedLabel(suggestedModel.topSpeed)} als verwachting.</Text>
                 </>
               ) : null}
+            </Card>
+          </>
+        ) : (
+          <>
+            <NumberedHeader n="1" title="STANDAARD VERTANDINGEN" subtitle="Kies een model als referentie of stel zelf in." />
+            <Card>
+              <ChipRow>
+                {CHAIN_SPROCKET_PRESETS.map((preset) => (
+                  <Chip
+                    key={preset.id}
+                    label={preset.label}
+                    active={gearPresetId === preset.id}
+                    onPress={() => {
+                      setGearPresetId(preset.id);
+                      setGearFront(preset.front);
+                      setGearRear(preset.rear);
+                    }}
+                  />
+                ))}
+              </ChipRow>
+              {PRIMARY_GEAR_INFO[block?.family ?? ''] ? (
+                <Text style={styles.hint}>{PRIMARY_GEAR_INFO[block!.family]}</Text>
+              ) : null}
+              <Text style={styles.hint}>
+                De interne primaire verhouding verschilt per blok en zit in de versnellingsbak zelf.
+              </Text>
+            </Card>
+
+            <NumberedHeader n="2" title="JE COMBINATIE" subtitle="Voor = kettingrondsel · achter = wiel-tandwiel." />
+            <Card>
+              <Stepper
+                label="Voorste tandwiel"
+                value={gearFront}
+                unit="T"
+                step={1}
+                onDec={() => setGearFront((v) => Math.max(10, v - 1))}
+                onInc={() => setGearFront((v) => Math.min(17, v + 1))}
+              />
+              <View style={styles.divider} />
+              <Stepper
+                label="Achterste tandwiel"
+                value={gearRear}
+                unit="T"
+                step={1}
+                onDec={() => setGearRear((v) => Math.max(35, v - 1))}
+                onInc={() => setGearRear((v) => Math.min(75, v + 1))}
+              />
+              <Text style={styles.hint}>Bereik: rondsel 10-17 T · wiel-tandwiel 35-75 T.</Text>
+              <View style={styles.divider} />
+              <Text style={styles.labelSmall}>VERHOUDING</Text>
+              <Text style={styles.bigValue}>{gearing.ratio.toFixed(2)}</Text>
+              {gearing.deltaPct !== null ? (
+                <Text style={styles.midValue}>
+                  {`${gearing.deltaPct > 0 ? '+' : ''}${String(gearing.deltaPct).replace('.', ',')}% t.o.v. ${gearPreset?.label ?? 'referentie'}`}
+                </Text>
+              ) : null}
+              <Text style={styles.hint}>{gearing.direction}</Text>
+              <Text style={styles.nextStepText}>Vuistregels</Text>
+              {GEARING_RULES.map((rule) => (
+                <Text key={rule} style={styles.stepText}>
+                  {'• ' + rule}
+                </Text>
+              ))}
+              <Button label="Vertanding opslaan in tuninggeschiedenis" variant="secondary" onPress={saveGear} />
             </Card>
           </>
         )}
@@ -530,6 +681,8 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
 }
 
 const styles = StyleSheet.create({
+  logNoteCard: { marginBottom: spacing.m },
+  logNote: { color: colors.success, fontWeight: '700', fontSize: 13 },
   blockInfo: { marginTop: spacing.s, backgroundColor: colors.surfaceAlt, borderRadius: radii.s, borderWidth: 1, borderColor: colors.borderSoft, padding: spacing.s },
   blockInfoTitle: { color: colors.text, fontWeight: '800', fontSize: 14, textTransform: 'uppercase' },
   blockInfoLine: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 4 },

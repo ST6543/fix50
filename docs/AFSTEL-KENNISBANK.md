@@ -189,6 +189,12 @@ warmte, extra frictie, pk-verlies bovenin.
 RF = (groot/klein primair) x (groot/klein secundair). Lagere RF = langere
 vertanding => hogere top, tragere acceleratie; hogere RF = korter => meer trek,
 lagere top. Vertanding pas veranderen NA cilinder/uitlaat/vario.
+Bekende fabrieksoverbrengingen (kettingtandwiel: voor/achter, 420-ketting):
+Rieju MRT 11/52 · Rieju RS2/Matrix en MBK X-Power/TZR 11/47 · Yamaha DT50
+11/50 (richtlijn) · Derbi Senda nieuw blok (D50B0) 11/53 · oud blok (EBE)
+14/53. Interne primaire verhouding: AM6 20/71 (3,55), Derbi 21/78 (3,7).
+Vuistregels: 1 tand kleiner voor = ±3 tand groter achter; 1 tand groter
+voor ≈ ±500 rpm lager op top (derbi-forum praktijk).
 Voorbeelden Piaggio 2T: 16/37 + 15/39 = RF 6,006 (langst); 13/39 + 14/48 = RF 10,29 (kortst).
 
 ### Powerband-indicaties ⚠️ forum-consensus/praktijk

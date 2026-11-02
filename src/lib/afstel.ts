@@ -580,4 +580,69 @@ export function diagnoseCvtSymptoms(state: CvtState, symptomIds: string[]): CvtD
   };
 }
 
+// ── Vertanding / ketting (schakelblokken: AM6, Derbi) ─────────────────
+
+export interface ChainSprocketPreset {
+  id: string;
+  label: string;
+  front: number;
+  rear: number;
+  note?: string;
+}
+
+/** Fabrieksoverbrengingen (kettingtandwiel/wiel-tandwiel) per bekend model. */
+export const CHAIN_SPROCKET_PRESETS: ChainSprocketPreset[] = [
+  { id: 'rieju-mrt', label: 'Rieju MRT 50', front: 11, rear: 52, note: 'fabriek 420-ketting, 132 schakels' },
+  { id: 'rieju-rs2', label: 'Rieju RS2 / Matrix', front: 11, rear: 47, note: 'AFAM "ratio: stock"' },
+  { id: 'mbk-xpower', label: 'MBK X-Power / Yamaha TZR 50', front: 11, rear: 47, note: '"ratio: stock"' },
+  { id: 'yamaha-dt', label: 'Yamaha DT50', front: 11, rear: 50, note: 'richtlijn, niet fabrieksgeverifieerd' },
+  { id: 'derbi-nieuw', label: 'Derbi Senda nieuw blok (2006+)', front: 11, rear: 53, note: 'D50B0 fabrieksverhouding' },
+  { id: 'derbi-oud', label: 'Derbi Senda oud blok (EBE)', front: 14, rear: 53, note: 'oud bloktype standaard' },
+];
+
+/** Interne primaire overbrenging van het blok, indien bekend. */
+export const PRIMARY_GEAR_INFO: Record<string, string> = {
+  am6: 'Interne primaire verhouding: 20/71 (3,55). Racekits (Bidalot) brengen dit naar 19/67 om de primaire as sneller te draaien.',
+  derbi: 'Interne primaire verhouding: 21/78 (3,7) volgens de Derbi-werkplaatshandleiding (Euro 3).',
+};
+
+export interface GearingResult {
+  ratio: number;
+  deltaPct: number | null;
+  direction: string;
+}
+
+/**
+ * Kettingsverhouding en richting t.o.v. een referentie (bijv. fabriek).
+ * Vuistregels: 1 tand kleiner voor ~ 3 tanden groter achter; ratio hoger = korter.
+ */
+export function calculateChainRatio(front: number, rear: number, referenceRatio?: number): GearingResult {
+  const ratio = rear / front;
+  let deltaPct: number | null = null;
+  let direction =
+    'Geen referentie gekozen. Vuistregel: ratio hoger = korter (meer trek, lagere top); ratio lager = langer (hogere top, minder trek).';
+
+  if (referenceRatio && referenceRatio > 0) {
+    deltaPct = Math.round(((ratio - referenceRatio) / referenceRatio) * 1000) / 10;
+    if (deltaPct > 0.5) {
+      direction = `Korter dan referentie (+${String(deltaPct).replace('.', ',')}%): meer trek en acceleratie, lagere top. Te kort = overtoeren; het blok valt bovenin buiten de powerband.`;
+    } else if (deltaPct < -0.5) {
+      direction = `Langer dan referentie (${String(deltaPct).replace('.', ',')}%): hogere top, minder trek. Te lang = blok komt niet meer op zijn powerband en voelt lui.`;
+    } else {
+      direction = `Vrijwel gelijk aan de referentie (±${String(Math.abs(deltaPct)).replace('.', ',')}%).`;
+    }
+  }
+
+  return { ratio, deltaPct, direction };
+}
+
+/** Vuistregels als vaste teksten, zodat ze overal eenduidig getoond worden. */
+export const GEARING_RULES = [
+  '1 tand kleiner vóór werkt als ±3 tanden groter achter.',
+  '1 tand groter vóór ≈ ±500 rpm lager op top (praktijkrichtlijn).',
+  'Ratio hoger = korter: meer trek, lagere top. Ratio lager = langer: hogere top, minder trek.',
+  'Vertanding pas aanpassen ná cilinder en uitlaat: het blok bepaalt of een langere vertanding nog loopt.',
+  'Voortandwielen kleiner dan ~11 en achtertandwielen groter dan ~71 bestaan (vrijwel) niet in de handel.',
+];
+
 export { calculateCarb };
