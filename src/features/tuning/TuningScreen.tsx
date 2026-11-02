@@ -60,6 +60,7 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
   return (
     <SafeAreaView style={styles.safe} edges={embedded ? [] : ['top']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <Button label="Afstelhulp openen" onPress={() => navigation.navigate('Afstel')} style={{ marginBottom: spacing.m }} />
         <SectionTitle>Huidige setup</SectionTitle>
         <Card>
           {setup ? (

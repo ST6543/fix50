@@ -29,6 +29,7 @@ import MaintenanceDetailScreen from '@/features/maintenance/MaintenanceDetailScr
 import MaintenanceHistoryScreen from '@/features/maintenance/MaintenanceHistoryScreen';
 import AddMaintenanceScreen from '@/features/maintenance/AddMaintenanceScreen';
 import SetupDetailScreen from '@/features/tuning/SetupDetailScreen';
+import AfstelScreen from '@/features/tuning/AfstelScreen';
 import TuningHistoryScreen from '@/features/tuning/TuningHistoryScreen';
 import SetupComparisonScreen from '@/features/tuning/SetupComparisonScreen';
 import PerformanceScreen from '@/features/performance/PerformanceScreen';
@@ -134,6 +135,7 @@ export default function AppNavigator() {
             <Stack.Screen name="MaintenanceHistory" component={MaintenanceHistoryScreen} options={{ title: 'Onderhoudsgeschiedenis' }} />
             <Stack.Screen name="AddMaintenance" component={AddMaintenanceScreen} options={{ title: 'Onderhoud registreren' }} />
             <Stack.Screen name="SetupDetail" component={SetupDetailScreen} options={{ title: 'Setup' }} />
+            <Stack.Screen name="Afstel" component={AfstelScreen} options={{ title: 'Afstelhulp' }} />
             <Stack.Screen name="TuningHistory" component={TuningHistoryScreen} options={{ title: 'Tuninggeschiedenis' }} />
             <Stack.Screen name="SetupComparison" component={SetupComparisonScreen} options={{ title: 'Setups vergelijken' }} />
             <Stack.Screen name="PerformanceRun" component={PerformanceRunScreen} options={{ title: 'GPS-test' }} />

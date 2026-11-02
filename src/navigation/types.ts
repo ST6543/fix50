@@ -16,6 +16,7 @@ export type RootStackParamList = {
   MaintenanceHistory: undefined;
   AddMaintenance: undefined;
   SetupDetail: { setupId?: string } | undefined;
+  Afstel: undefined;
   TuningHistory: undefined;
   SetupComparison: undefined;
   PerformanceRun: undefined;
