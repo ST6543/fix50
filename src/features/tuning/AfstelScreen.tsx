@@ -6,6 +6,7 @@ import Svg, { Line, Polyline, Rect } from 'react-native-svg';
 
 import { Badge, Button, Card, Chip, ChipRow } from '@/components/ui';
 import { useScooters } from '@/hooks/useScooters';
+import { ENGINE_BLOCKS, findBlockFromText } from '@/data/engineBlocks';
 import { colors, fonts, radii, spacing } from '@/theme';
 import {
   calculateCarb,
@@ -13,7 +14,6 @@ import {
   CARB_DIAGNOSES,
   CARB_SETUP_LABELS,
   diagnoseCvtSymptoms,
-  ENGINE_FAMILIES,
   CVT_CARTER_PRESETS,
   CVT_ENGINE_PRESETS,
   CVT_SPRINGS,
@@ -152,13 +152,15 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   );
   const [setupType, setSetupType] = useState<CarbSetupType>('sport');
   const [cooling, setCooling] = useState<Cooling>(() => ((setup?.bloktype ?? '').toLowerCase().includes('water') ? 'LC' : 'AC'));
-  const [familyId, setFamilyId] = useState<string>(() => (setup?.bloktype ?? '').toLowerCase().includes('minarelli') ? 'minarelli-h' : 'onbekend');
+  const [blockId, setBlockId] = useState<string>(() => findBlockFromText(setup?.bloktype)?.id ?? 'onbekend');
   const [diagId, setDiagId] = useState<string | null>(null);
 
+  const block = ENGINE_BLOCKS.find((b) => b.id === blockId) ?? null;
   const carb = useMemo(
-    () => calculateCarb({ cc, carbMm, material, setupType, cooling, engineFamilyId: familyId }),
-    [cc, carbMm, material, setupType, cooling, familyId],
+    () => calculateCarb({ cc, carbMm, material, setupType, cooling, engineFamilyId: block?.family ?? 'onbekend' }),
+    [cc, carbMm, material, setupType, cooling, block],
   );
+  const blockPlug = block?.plugCode ? block.plugCode.replace('x', String(carb.heat)) : null;
   const diag = CARB_DIAGNOSES.find((d) => d.id === diagId) ?? null;
 
   // ── CVT-state (pre-filled waar mogelijk) ──
@@ -206,10 +208,30 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
             <Card>
               <Text style={styles.label}>Motor / blok</Text>
               <ChipRow>
-                {ENGINE_FAMILIES.map((f) => (
-                  <Chip key={f.id} label={f.label} active={familyId === f.id} onPress={() => setFamilyId(f.id)} />
+                {ENGINE_BLOCKS.map((b) => (
+                  <Chip key={b.id} label={b.label} active={blockId === b.id} onPress={() => setBlockId(b.id)} />
                 ))}
+                <Chip label="Custom / onbekend" active={blockId === 'onbekend'} onPress={() => setBlockId('onbekend')} />
               </ChipRow>
+              {block ? (
+                <View style={styles.blockInfo}>
+                  <Text style={styles.blockInfoTitle}>{block.label}</Text>
+                  <Text style={styles.hint} numberOfLines={2}>
+                    {block.note}
+                  </Text>
+                  <Text style={styles.blockInfoLine}>{`Standaard carb: ${block.stockCarbMm.map((m) => String(m).replace('.', ',')).join(' · ')} mm · bougie zoals ${blockPlug ?? block.plugCode}`}</Text>
+                  <Text style={styles.blockInfoLine}>{`Powerband (st. 50cc): ${block.stockPowerband[0].toLocaleString('nl-NL')}–${block.stockPowerband[1].toLocaleString('nl-NL')} rpm`}</Text>
+                  <Text style={styles.blockInfoLine}>{`Bekende restricties: ${block.restrictors.join(' · ')}`}</Text>
+                  <Text style={styles.blockInfoLine}>{`Opvoer-stages: ${block.kits.map((k) => `${k.cc}cc ${k.note}`).join(' · ')}`}</Text>
+                  {block.pitfalls.map((pit) => (
+                    <Text key={pit} style={styles.blockInfoPit}>{`⚠ ${pit}`}</Text>
+                  ))}
+                </View>
+              ) : (
+                <Text style={[styles.hint, { marginTop: spacing.xs }]}>
+                  Geen blok gekozen: advies werkt dan universeel, zonder blok-specifieke bougie of stages.
+                </Text>
+              )}
               <Text style={styles.label}>Cilinderinhoud</Text>
               <ChipRow>
                 {CC_OPTIONS.map((v) => (
@@ -508,6 +530,10 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
 }
 
 const styles = StyleSheet.create({
+  blockInfo: { marginTop: spacing.s, backgroundColor: colors.surfaceAlt, borderRadius: radii.s, borderWidth: 1, borderColor: colors.borderSoft, padding: spacing.s },
+  blockInfoTitle: { color: colors.text, fontWeight: '800', fontSize: 14, textTransform: 'uppercase' },
+  blockInfoLine: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 4 },
+  blockInfoPit: { color: colors.warning, fontSize: 12, lineHeight: 17, marginTop: 2 },
   safe: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.l, paddingBottom: spacing.xxl },
   tabsCard: { flexDirection: 'row', gap: spacing.s, marginBottom: spacing.m },

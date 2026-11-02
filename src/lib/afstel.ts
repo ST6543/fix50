@@ -29,6 +29,8 @@ export const ENGINE_FAMILIES: EngineFamily[] = [
   { id: 'minarelli-v', label: 'Minarelli verticaal', plug: 'BRxHS' },
   { id: 'piaggio', label: 'Piaggio (Zip · Runner · Vespa)', plug: 'BPRxES' },
   { id: 'peugeot', label: 'Peugeot', plug: 'BRxHS' },
+  { id: 'am6', label: 'Minarelli AM6 (schakel)', plug: 'BRxES' },
+  { id: 'derbi', label: 'Derbi EBE/EBS/D50B0', plug: 'BRxES' },
   { id: 'honda', label: 'Honda / Kymco', plug: 'BRxHSA' },
   { id: 'onbekend', label: 'Onbekend / universeel', plug: null },
 ];
@@ -201,6 +203,7 @@ export interface CvtEnginePreset {
 export const CVT_ENGINE_PRESETS: CvtEnginePreset[] = [
   { label: '50cc standaard', min: 6000, max: 7800 },
   { label: '70cc sport', min: 7600, max: 9000 },
+  { label: '70cc midrace', min: 9500, max: 10500 },
   { label: '70cc race', min: 9000, max: 11000 },
   { label: '4T / GY6', min: 5500, max: 7500 },
 ];
