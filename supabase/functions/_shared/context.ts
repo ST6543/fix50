@@ -95,7 +95,7 @@ export async function getScooterContext(
   const { scooter_setups, ...scooter } = data as Record<string, unknown> & { scooter_setups: unknown[] };
   return {
     ...(scooter as unknown as ScooterContext),
-    setup: (scooter_setups && scooter_setups[0]) ?? null,
+    setup: ((scooter_setups as Record<string, unknown>[] | null)?.[0]) ?? null,
   };
 }
 

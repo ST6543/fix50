@@ -189,6 +189,12 @@ warmte, extra frictie, pk-verlies bovenin.
 RF = (groot/klein primair) x (groot/klein secundair). Lagere RF = langere
 vertanding => hogere top, tragere acceleratie; hogere RF = korter => meer trek,
 lagere top. Vertanding pas veranderen NA cilinder/uitlaat/vario.
+
+De diagnose-chat (Edge Function `diagnose-chat`) leest deze kennisbank live:
+`supabase/functions/_shared/blocks.ts` kiest via `pickEngineBlock()` het blok-profiel
+(setup → engine_type → merk/model) en zet het als BLOKKEN-KENNISBANK-sectie in de
+systeemprompt; bij schakelblokken adviseert de AI dus vertanding, geen vario.
+Gedekt door tests/ai-blocks.test.ts.
 Bekende fabrieksoverbrengingen (kettingtandwiel: voor/achter, 420-ketting):
 Rieju MRT 11/52 · Rieju RS2/Matrix en MBK X-Power/TZR 11/47 · Yamaha DT50
 11/50 (richtlijn) · Derbi Senda nieuw blok (D50B0) 11/53 · oud blok (EBE)

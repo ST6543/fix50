@@ -61,7 +61,7 @@ supabase/
 scripts/
   lib/parse-excel.ts   # Excel → rijen (idempotent via content_hash)
   import-diagnosis.ts  # Import: API-modus of SQL-dump
-tests/             # 14 Jest-suites (160 tests)
+tests/             # 15 Jest-suites (171 tests)
 docs/              # Onderzoeks- en plandocumenten (o.a. AI-SLIMMER-PLAN.md, release-checklist.md)
 src/lib/insights.ts # Slimme signalen (fase A van het AI-plan)
 ```
@@ -187,7 +187,7 @@ De Edge Function praat met elke OpenAI-compatibele API (OpenAI, OpenRouter, Azur
 ## 6. Tests & typecheck
 
 ```bash
-npm test        # 14 suites, 160 tests (validatie, GPS, onderhoud, AI-guardrails, Excel-parser, km-voorspelling, tankbeurten & export, PDF-dossiers, slimme signalen, AI-inzichten, afstelmodellen & blokken-kennisbank)
+npm test        # 15 suites, 171 tests (validatie, GPS, onderhoud, AI-guardrails, Excel-parser, km-voorspelling, tankbeurten & export, PDF-dossiers, slimme signalen, AI-inzichten, afstelmodellen & blokken-kennisbank, blokken-in-diagnosechat)
 npm run typecheck
 ```
 

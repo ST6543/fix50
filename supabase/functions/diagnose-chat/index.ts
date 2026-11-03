@@ -9,6 +9,7 @@ import { errorJson, json, preflight } from '../_shared/cors.ts';
 import { aiResponseSchema, chatRequestSchema, type AiResponse } from '../_shared/schemas.ts';
 import { callAi } from '../_shared/ai.ts';
 import { buildSystemPrompt, buildUserTurn } from '../_shared/prompt.ts';
+import { buildBlockContext } from '../_shared/blocks.ts';
 import {
   formatDiagnosisForPrompt,
   getMaintenanceContext,
@@ -129,7 +130,7 @@ Deno.serve(async (req: Request) => {
   let usedFallback = false;
 
   const turns = [
-    { role: 'system' as const, content: buildSystemPrompt({ scooter, diagnosisRows, maintenance }) },
+    { role: 'system' as const, content: buildSystemPrompt({ scooter, diagnosisRows, maintenance, blockContext: buildBlockContext(scooter) }) },
     ...recent.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
     { role: 'user' as const, content: buildUserTurn(message, diagnosisBlock) },
   ];

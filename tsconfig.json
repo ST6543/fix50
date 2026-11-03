@@ -7,9 +7,23 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
-    }
+      "@/*": [
+        "src/*"
+      ],
+      "npm:zod@3.25.76": [
+        "node_modules/zod"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
-  "include": ["src", "scripts", "tests", "index.ts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "src",
+    "scripts",
+    "tests",
+    "index.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
