@@ -32,7 +32,11 @@ import {
   CHAIN_SPROCKET_PRESETS,
   calculateChainRatio,
   GEARING_RULES,
+  GEAR_GOAL_LABELS,
+  buildGearSuggestions,
   PRIMARY_GEAR_INFO,
+  type GearingGoal,
+  type GearSuggestion,
 } from '@/lib/afstel';
 
 const CC_OPTIONS = [50, 65, 70, 80];
@@ -192,6 +196,11 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const suggestedModel = useMemo(() => calculateCvt(userDiag.suggested), [userDiag]);
 
   const gearPreset = CHAIN_SPROCKET_PRESETS.find((x) => x.id === gearPresetId) ?? null;
+  const [gearGoal, setGearGoal] = useState<GearingGoal | null>(null);
+  const gearSuggestions: GearSuggestion[] = useMemo(
+    () => (gearGoal ? buildGearSuggestions(gearFront, gearRear, gearGoal) : []),
+    [gearGoal, gearFront, gearRear],
+  );
   const gearing = useMemo(
     () => calculateChainRatio(gearFront, gearRear, gearPreset ? gearPreset.rear / gearPreset.front : undefined),
     [gearFront, gearRear, gearPreset],
@@ -657,6 +666,41 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 </Text>
               ) : null}
               <Text style={styles.hint}>{gearing.direction}</Text>
+              <View style={styles.divider} />
+              <Text style={styles.labelSmall}>SUGGESTIES</Text>
+              <ChipRow>
+                {(Object.keys(GEAR_GOAL_LABELS) as GearingGoal[]).map((g) => (
+                  <Chip
+                    key={g}
+                    label={GEAR_GOAL_LABELS[g]}
+                    active={gearGoal === g}
+                    onPress={() => setGearGoal((prev) => (prev === g ? null : g))}
+                  />
+                ))}
+              </ChipRow>
+              {gearGoal
+                ? gearSuggestions.map((sug) => (
+                    <View key={sug.id} style={styles.sugRow}>
+                      <Text style={styles.sugTitle}>{sug.title}</Text>
+                      <Text style={styles.sugDelta}>
+                        {`${sug.deltaPct > 0 ? '+' : ''}${String(sug.deltaPct).replace('.', ',')}% ${
+                          sug.goal === 'trek' ? 'korter' : 'langer'
+                        } (ratio ${sug.ratio.toFixed(2)})`}
+                      </Text>
+                      <Text style={styles.hint}>{sug.note}</Text>
+                      <Pressable
+                        style={styles.sugApply}
+                        onPress={() => {
+                          setGearFront(sug.newFront);
+                          setGearRear(sug.newRear);
+                          setGearGoal(null);
+                        }}
+                      >
+                        <Text style={styles.sugApplyText}>Instellen</Text>
+                      </Pressable>
+                    </View>
+                  ))
+                : null}
               <Text style={styles.nextStepText}>Vuistregels</Text>
               {GEARING_RULES.map((rule) => (
                 <Text key={rule} style={styles.stepText}>
@@ -743,6 +787,11 @@ const styles = StyleSheet.create({
   statLabel: { color: colors.textSubtle, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
   statValue: { color: colors.text, fontWeight: '800', fontSize: 15, fontFamily: fonts.display, marginTop: 2 },
   stepText: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: 4 },
+  sugRow: { backgroundColor: colors.surfaceAlt, borderRadius: radii.s, padding: spacing.s, borderWidth: 1, borderColor: colors.borderSoft, marginTop: spacing.xs },
+  sugTitle: { color: colors.text, fontWeight: '700', fontSize: 14 },
+  sugDelta: { color: colors.primary, fontWeight: '700', fontSize: 13, marginTop: 2 },
+  sugApply: { alignSelf: 'flex-start', marginTop: spacing.s, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.primaryBorder, backgroundColor: colors.primarySubtle, paddingHorizontal: spacing.m, paddingVertical: spacing.xs },
+  sugApplyText: { color: colors.primary, fontWeight: '800', fontSize: 13 },
   disclaimerCard: { marginTop: spacing.l },
   disclaimer: { color: colors.textSubtle, fontSize: 12, lineHeight: 18 },
   disclaimerBrand: { color: colors.textSubtle, fontSize: 12, marginTop: spacing.s, fontStyle: 'italic' },

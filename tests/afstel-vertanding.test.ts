@@ -1,5 +1,48 @@
 /** Tests voor de vertanding/ketting-rekenmodellen (schakelblokken AM6/Derbi). */
-import { calculateChainRatio, CHAIN_SPROCKET_PRESETS, PRIMARY_GEAR_INFO } from '../src/lib/afstel';
+import {
+  buildGearSuggestions,
+  calculateChainRatio,
+  CHAIN_SPROCKET_PRESETS,
+  PRIMARY_GEAR_INFO,
+  type GearingGoal,
+} from '../src/lib/afstel';
+
+describe('buildGearSuggestions', () => {
+  test('trek-suggesties zijn korter dan de huidige combinatie', () => {
+    const sugs = buildGearSuggestions(11, 52, 'trek');
+    expect(sugs.length).toBeGreaterThanOrEqual(2);
+    for (const sug of sugs) {
+      expect(sug.ratio).toBeGreaterThan(52 / 11);
+      expect(sug.deltaPct).toBeGreaterThan(0);
+    }
+    const voor = sugs[0]!;
+    expect(voor.newFront).toBe(10);
+    expect(voor.ratio).toBeCloseTo(5.2, 2);
+    expect(voor.deltaPct).toBeCloseTo(10.0, 1);
+  });
+
+  test('top-suggesties zijn langer', () => {
+    const sugs = buildGearSuggestions(11, 52, 'top');
+    expect(sugs.length).toBeGreaterThanOrEqual(2);
+    for (const sug of sugs) expect(sug.ratio).toBeLessThan(52 / 11);
+    expect(sugs[0]!.newFront).toBe(12);
+  });
+
+  test('respecteert het handelsbereik (voortandwiel mag niet onder 10)', () => {
+    const sugs = buildGearSuggestions(10, 52, 'trek' as GearingGoal);
+    for (const sug of sugs) {
+      expect(sug.newFront).toBeGreaterThanOrEqual(10);
+      expect(sug.newRear).toBeLessThanOrEqual(75);
+    }
+    expect(sugs.some((sug) => sug.newFront === 10 && sug.newRear === 52)).toBe(false);
+  });
+
+  test('achtertandwiel-suggestie volgt de 1:3-smetontwikkeling', () => {
+    const sugs = buildGearSuggestions(11, 52, 'trek');
+    const achter = sugs.find((x) => x.newRear === 55)!;
+    expect(achter).toBeTruthy();
+  });
+});
 
 describe('CHAIN_SPROCKET_PRESETS — dataset-integriteit', () => {
   test('unieke ids en plausibele tandcounts', () => {

@@ -645,4 +645,77 @@ export const GEARING_RULES = [
   'Voortandwielen kleiner dan ~11 en achtertandwielen groter dan ~71 bestaan (vrijwel) niet in de handel.',
 ];
 
+
+export type GearingGoal = 'trek' | 'top';
+
+export const GEAR_GOAL_LABELS: Record<GearingGoal, string> = {
+  trek: 'Meer trek',
+  top: 'Hogere top',
+};
+
+export interface GearSuggestion {
+  id: string;
+  goal: GearingGoal;
+  title: string;
+  newFront: number;
+  newRear: number;
+  ratio: number;
+  /** Delta t.o.v. de huidige combinatie, 1 decimaal, %-tekst-klaar. */
+  deltaPct: number;
+  note: string;
+}
+
+const GEAR_FRONT_MIN = 10;
+const GEAR_FRONT_MAX = 17;
+const GEAR_REAR_MIN = 35;
+const GEAR_REAR_MAX = 75;
+
+function fmtPct1(v: number): string {
+  return String(Math.abs(v)).replace('.', ',');
+}
+
+/**
+ * Doelgerichte tandwiel-suggesties voor schakelblokken.
+ * Trek = korter (voortandwiel -1 of achter +3); top = langer (voor +1 of achter -3).
+ * Binnen handelsbereik; delta is t.o.v. de huidige combinatie, niet de fabriek.
+ */
+export function buildGearSuggestions(front: number, rear: number, goal: GearingGoal): GearSuggestion[] {
+  const current = rear / front;
+  const out: GearSuggestion[] = [];
+
+  const push = (newFront: number, newRear: number, which: 'voor' | 'achter'): void => {
+    if (newFront === front && newRear === rear) return;
+    const ratio = newRear / newFront;
+    const deltaPct = Math.round(((ratio - current) / current) * 1000) / 10;
+    out.push({
+      id: `${goal}-${which}`,
+      goal,
+      title: which === 'voor' ? `Voortandwiel ${front} → ${newFront} T` : `Achtertandwiel ${rear} → ${newRear} T`,
+      newFront,
+      newRear,
+      ratio,
+      deltaPct,
+      note:
+        which === 'voor'
+          ? goal === 'trek'
+            ? '±500 rpm hoger op top; het blok komt makkelijker in zijn powerband.'
+            : '±500 rpm lager op top; langere trap, rustiger toerental bij hoge snelheid.'
+          : goal === 'trek'
+            ? '≈ Gelijkwaardig aan 1 tand kleiner vóór; ketting wordt ±3 schakels langer.'
+            : '≈ Gelijkwaardig aan 1 tand groter vóór; ketting wordt ±3 schakels korter.',
+    });
+  };
+
+  if (goal === 'trek') {
+    if (front > GEAR_FRONT_MIN) push(front - 1, rear, 'voor');
+    if (rear < GEAR_REAR_MAX) push(front, rear + 3, 'achter');
+  } else {
+    if (front < GEAR_FRONT_MAX) push(front + 1, rear, 'voor');
+    if (rear > GEAR_REAR_MIN) push(front, rear - 3, 'achter');
+  }
+
+  return out;
+}
+
 export { calculateCarb };
+
