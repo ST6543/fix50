@@ -6,9 +6,12 @@ import Svg, { Line, Polyline, Rect } from 'react-native-svg';
 
 import { Badge, Button, Card, Chip, ChipRow } from '@/components/ui';
 import { useScooters } from '@/hooks/useScooters';
+import * as ImagePicker from 'expo-image-picker';
 import * as tuningService from '@/services/tuning';
 import { ENGINE_BLOCKS, findBlockFromText } from '@/data/engineBlocks';
 import { colors, fonts, radii, spacing } from '@/theme';
+import { shrinkForScan } from '@/lib/image-shrink';
+import { scanPlugPhoto, type PlugScanResult } from '@/services/plug-scan';
 import {
   calculateCarb,
   calculateCvt,
@@ -198,11 +201,53 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const suggestedModel = useMemo(() => calculateCvt(userDiag.suggested), [userDiag]);
 
   const gearPreset = CHAIN_SPROCKET_PRESETS.find((x) => x.id === gearPresetId) ?? null;
+  // Bougie-foto-analyse (NGK-kennisbank via plug-photo Edge Function)
+  const [plugScanBusy, setPlugScanBusy] = useState(false);
+  const [plugScanResult, setPlugScanResult] = useState<PlugScanResult | null>(null);
+  const [plugScanNote, setPlugScanNote] = useState<string | null>(null);
+
   const [gearGoal, setGearGoal] = useState<GearingGoal | null>(null);
   const gearSuggestions: GearSuggestion[] = useMemo(
     () => (gearGoal ? buildGearSuggestions(gearFront, gearRear, gearGoal) : []),
     [gearGoal, gearFront, gearRear],
   );
+
+  async function handlePlugScan(source: 'camera' | 'library') {
+    setPlugScanNote(null);
+    const perm =
+      source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setPlugScanNote("Geen toestemming voor camera/foto's — zet dit aan in de instellingen.");
+      return;
+    }
+    const result =
+      source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ quality: 0.7, base64: true, exif: false })
+        : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, base64: true, exif: false });
+    if (result.canceled || !result.assets[0]?.base64) return;
+
+    setPlugScanBusy(true);
+    try {
+      const shrunk = await shrinkForScan(result.assets[0]);
+      const out = await scanPlugPhoto({
+        base64: shrunk.base64,
+        mime: shrunk.mime,
+        scooterId: activeScooter?.id ?? null,
+      });
+      if (!out.found) {
+        setPlugScanResult(null);
+        setPlugScanNote(out.warning ?? 'De neus is niet goed te lezen. Probeer een nieuwe bougie en daglicht.');
+        return;
+      }
+      setPlugScanResult(out);
+    } catch (err) {
+      setPlugScanNote(err instanceof Error ? err.message : 'Bougie-foto mislukt. Probeer het opnieuw.');
+    } finally {
+      setPlugScanBusy(false);
+    }
+  }
   const gearing = useMemo(
     () => calculateChainRatio(gearFront, gearRear, gearPreset ? gearPreset.rear / gearPreset.front : undefined),
     [gearFront, gearRear, gearPreset],
@@ -430,6 +475,45 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                   {`${c.code} = ${c.betekenis}`}
                 </Text>
               ))}
+              <View style={styles.divider} />
+              <Text style={styles.labelSmall}>FOTO-ANALYSE (RICHTLIJN)</Text>
+              <View style={styles.plugScanRow}>
+                <Pressable style={styles.sugApply} disabled={plugScanBusy} onPress={() => handlePlugScan('camera')}>
+                  <Text style={styles.sugApplyText}>Foto maken</Text>
+                </Pressable>
+                <Pressable style={styles.sugApply} disabled={plugScanBusy} onPress={() => handlePlugScan('library')}>
+                  <Text style={styles.sugApplyText}>Uit galerij</Text>
+                </Pressable>
+              </View>
+              {plugScanBusy ? <Text style={styles.hint}>Foto wordt geanalyseerd...</Text> : null}
+              {plugScanNote ? <Text style={styles.blockInfoPit}>{plugScanNote}</Text> : null}
+              {plugScanResult ? (
+                <View style={styles.diagResult}>
+                  <Text style={styles.resultColText}>{plugScanResult.condition_label}</Text>
+                  {plugScanResult.code_detected ? (
+                    <Text style={styles.hint}>{`Gevonden code: ${plugScanResult.code_detected}${plugScanResult.heat_estimate ? ` (hittegraad ${plugScanResult.heat_estimate})` : ''}`}</Text>
+                  ) : null}
+                  {plugScanResult.explanation ? <Text style={styles.hint}>{plugScanResult.explanation}</Text> : null}
+                  {plugScanResult.description ? (
+                    <Text style={styles.blockInfoLine}>{`Wat de AI zag: ${plugScanResult.description}`}</Text>
+                  ) : null}
+                  {plugScanResult.jet_direction || plugScanResult.plug_grade_direction ? (
+                    <Text style={styles.nextStepText}>
+                      {[
+                        plugScanResult.jet_direction ? `Mengsel: ${plugScanResult.jet_direction}` : null,
+                        plugScanResult.plug_grade_direction
+                          ? `Hittegraad: ${plugScanResult.plug_grade_direction}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join('  ·  ')}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.blockInfoLine}>
+                    Kleuroordeel is een richtlijn, geen zekerheid. Verander nooit tegelijk de sproeier EN de hittegraad.
+                  </Text>
+                </View>
+              ) : null}
             </Card>
 
             <NumberedHeader n="5" title="MENGSEL & DIAGNOSE" subtitle="Kies een symptoom voor gericht advies." />
@@ -776,6 +860,7 @@ const styles = StyleSheet.create({
   mapRange: { color: colors.primary, fontWeight: '700', fontSize: 13, textTransform: 'uppercase' },
   mapComp: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
   plugRow: { flexDirection: 'row', gap: spacing.s },
+  plugScanRow: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.xs },
   plugTile: { flex: 1, backgroundColor: colors.surfaceAlt, borderRadius: radii.s, padding: spacing.s, borderWidth: 1, borderColor: colors.borderSoft },
   plugLabel: { color: colors.text, fontWeight: '700', fontSize: 13 },
   plugDesc: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 2 },
