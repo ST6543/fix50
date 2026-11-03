@@ -47,3 +47,6 @@ vispayload.json
 # analyse dumps van bronbestanden (tijdelijk)
 source_oao_text.txt
 source_excel_dump.txt
+
+# Lokale chat-/bijlage-dump van Freebuff (geen projectcode)
+.cloud-attachments/

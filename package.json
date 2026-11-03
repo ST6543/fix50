@@ -15,6 +15,7 @@
     "import:diagnosis:sql": "tsx scripts/import-diagnosis.ts --sql > supabase/seed/diagnosis_seed.sql",
     "pdf:brand": "node scripts/gen-pdf-brand.mjs",
     "pdf:preview": "tsx scripts/pdf-preview.ts",
+    "archil:check": "node --env-file-if-exists=.env scripts/archil-persist-check.mjs",
     "desktop:export": "expo export --platform web --output-dir desktop/www",
     "desktop:build": "npm run desktop:export && electron-builder --win portable --config electron-builder.desktop.json"
   },
@@ -26,6 +27,7 @@
     "@react-navigation/native": "^7.4.1",
     "@react-navigation/native-stack": "^7.19.2",
     "@supabase/supabase-js": "^2.117.1",
+    "disk": "1.8.0",
     "expo": "~57.0.27",
     "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
