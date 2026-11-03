@@ -24,6 +24,8 @@ import {
   cvtSpeedLabel,
   PLUG_READING,
   PLUG_READING_NOTE,
+  PLUG_HEAT_INFO,
+  PLUG_CODE_INFO,
   THROTTLE_MAP,
   type CarbMaterial,
   type CarbSetupType,
@@ -416,6 +418,18 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 ))}
               </View>
               <Text style={styles.hint}>{PLUG_READING_NOTE}</Text>
+              <View style={styles.divider} />
+              <Text style={styles.blockInfoTitle}>Hittegraad &amp; bougiecode (NGK)</Text>
+              {PLUG_HEAT_INFO.map((t) => (
+                <Text key={t.slice(0, 24)} style={styles.blockInfoLine}>
+                  {'• ' + t}
+                </Text>
+              ))}
+              {PLUG_CODE_INFO.map((c) => (
+                <Text key={c.code} style={styles.blockInfoLine}>
+                  {`${c.code} = ${c.betekenis}`}
+                </Text>
+              ))}
             </Card>
 
             <NumberedHeader n="5" title="MENGSEL & DIAGNOSE" subtitle="Kies een symptoom voor gericht advies." />

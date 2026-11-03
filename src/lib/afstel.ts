@@ -177,6 +177,24 @@ export const PLUG_READING = [
 export const PLUG_READING_NOTE =
   'Lees een nieuwe of schone bougie pas na 10–20 minuten rijden. De kleur na een volgas-test (plug chop) zegt meer dan na stationair draaien.';
 
+/** Hittegraad an lessen (NGK-uiting, bron: ngksparkplugs.com Spark Plug Basics / Heat Range). */
+export const PLUG_HEAT_INFO = [
+  'Hoger getal = kouder: de isolatorneus voert warmte sneller af naar de kop. BR8HS is heter dan BR9HS; BR9HS heter dan BR10HS.',
+  'Meer toeren, belasting of compressie → proef één graad kouder. Twijfel tussen twee graden? Kies de koudste: te koud vervuilt alleen, te heet kan de zuiger verbranden.',
+  'Zelfreiniging start pas rond ±450 °C: bij stadsgebruik en koud starten vervuilt zelfs een perfecte afstelling sneller.',
+  'Verander nooit tegelijk bougiegraad én afstelling (sproeier/clip); anders wéét je niet wat de kleur veroorzaakt.',
+] as const;
+
+/** Wat elke letter/positie in de NGK-code (BRxHS / BRxES) betekent. */
+export const PLUG_CODE_INFO: { code: string; betekenis: string }[] = [
+  { code: 'B', betekenis: 'schroefdraad ø 14 mm, sleutelmaat ±20,8 mm' },
+  { code: 'R', betekenis: 'resistor (ontstoorde bougie; verschil met gewone BxHS)' },
+  { code: '8 / 9 / 10', betekenis: 'hittegraad: hoger getal = kouder (BR8HS is de warmste van de gangbare 50cc-graden)' },
+  { code: 'H', betekenis: 'schachtlengte 12,7 mm — "korte schacht"' },
+  { code: 'E', betekenis: 'schachtlengte 19 mm — "lange schacht" (BRxES, o.a. AM6/Derbi)' },
+  { code: 'S', betekenis: 'standaard stalen kern-elektrode, standaard vonkgat' },
+] as const;
+
 // ── CVT (variatieur, drukveer, trekveren, snaar) ──────────────────────
 
 export interface CvtSpring {

@@ -267,3 +267,56 @@ Veel koppelpunttemperatuur/powerband-getallen zijn forum-consensus, geen fabriek
 - AM6/derbi boringsstanden en fabrieksrestrictoren per bouwjaar: niet geverifieerd.
 - Sproeierschaal van "Denso": bestaat niet in de praktijk; Denso is een bougie-merk.
 
+
+## 6. ECU/CDI-ontgrenzing bij schakelblokken (AM6 E4/E5, Derbi D50B0)
+
+### Geverifieerd (NL/BE-bronnen)
+- **AM6 t/m 2018 (Euro 1-3):** onbegrensde CDI, begrenzing was puur mechanisch (uitlaatprop, carburateurrestrictie, tandwielen). **Vanaf Euro4/Euro5 (2018+) op Rieju/Beta/Sherco/Fantic/SWM:** ECU met elektronische toerentalbegrenzing (o.a. via toerentalsensor).
+- **AM6 E4/E5-praktijk:** eerst de gratis B5-draad-methode (zwarte draad op positie B5 van de ECU-stekker, door Beta beschreven voor de RR 50 E5). Werkt NIET op elk model - een NL-forumcasus (Rieju MRT Pro E5) meldt dat B5 geen effect had. Daarna: plug-and-play vervangende ECU (Stage6 onbegrensd Euro4/5, 24-pins, ±93 euro, dekt beide; Polini; VOCA).
+- **Belangrijk bij ECU-vervanging (bijv. AM6 E4/E5):** aftermarket-ECU's kunnen de **elektronische oliepomp** niet aansturen - olietekort-levering = motorschade. Controleer of de unit de oliepomp regelt of dat je olieratio handmatig bijstelt.
+- **D50B0 (Derbi Senda, Euro4 vanaf 2018):** gangbare route is een **vervangende CDI/ECU-unit** (Mezoly als de meest gekochte; 101 Octane "verstelbaar" ±39 euro met traploos af te passen begrenzer; dealer-ECU via importeur circa 65 euro). De NL-bronnen noemen dit NOOIT "flash". Of de D50B0 E4 een elektronisch geregelde carburateur/lambda heeft is een CONFLICT in de bronnen (zie "Niet geverifieerd").
+- Praktische gevolgen na ECU-vervanging: sproeier opnieuw afstellen (groter), bougie een graad kouder overwegen, vertanding herzien.
+
+### Niet geverifieerd (expliciet gemarkeerd)
+- "Flash-software op de originele ECU" bij AM6 E4/E5: geen NL/BE-pagina noemt een concrete partij, tool of prijs; de bronnen zeggen slechts "uitsluitend door gespecialiseerde bedrijven".
+- Of de D50B0 Euro4 lambda/O2-sensoren of een elektronisch geregelde carburateur heeft: de 50factory-datasheet zegt "carburateur, CDI" (geen lambda), forumleden menen juist "elektronische carburateur". CONFLICT, niet te beslissen op NL-bronnen.
+- Euro5+ (vanaf 2025): de bekende plug-and-play-units (Stage6/VOCA) dekken dit nog niet; EZrider labelt ze expliciet "NIET Euro 5+". Wacht je op een unit, check dan per verkoper het ondersteuningsmodel.
+
+### Bronnen
+ezrider.nl "CDI/ECU ontgrenzen" · speed-line.com (Stage6 CDI/ECU Euro4/5) · k-parts.be (Mezoly/Polini CDI-ECU) · allesvoorscooters.nl "CDI onbegrensd verstelbaar per-derbi-D50B0-Euro4" · derbi-forum.nl #22475 & #26142 · scooterforum.net #228442 & #236476 · en.50factory.com (factsheet Senda Euro4) · scootertourclubnederland.com (lambda-bung-passten).
+
+## 7. Bougies: hittegraad en aflezen (NGK-basis, GEVERIFIEERD)
+
+### Hittegraad
+- **Hoger getal = kouder** (NGK/Denso/Pulstar). Bij Champion/Autolite/Bosch is de nummering omgekeerd - een klassieke verwarring in fora.
+- "Kouder/heter" = **warmte-afvoersnelheid van de isolatorneus naar de kop**, NIET de vonkenergie. Korte, hapere isolatorneus = koudere bougie; lange, dunne neus = hetere bougie.
+- Optimaal werkvenster ca. **500-800 C** op de neus; onder ±450 C start zelfreiniging niet (koolstofresten) en van lucht over 800 C oververhitting & pre-ignition. Verschil per graad: ongeveer 70-100 C op de tip.
+- Praktijk 50cc 2-takt: **standaard/stil gebruik: BR8 · licht opgevoerd: BR8-9 · sterk opgevoerd / langdurig volgas: BR9-10.**
+- NGK-devies: **twijfel tussen twee graden → kies de koudere** (te koud: alleen sneller vervuiled; te heet: mogelijke zuigerschade). Verander nooit tegelijk de bougiegraad én sproeier/clip.
+- Betekenis van de code (BRxHS/BRxES): B = schroefdraad 14 mm · R = resistor · 8/9/10 = hittegraad · H = schacht 12,7 · E = schacht 19 mm · S = standaard kern-elektrode. **H en E zijn NIET onderling verwisselbaar** (verschillende schachtlengtes; te lange schacht kan de zuiger raken).
+- In de app is 'x' = hittegraad-plek: BRxHS (vario-blokken) / BRxES (AM6/Derbi).
+
+### Aflezen (kleur van de isolatorneus)
+| Kleur | Betekenis | Eerste actie |
+| --- | --- | --- |
+| Koffiebruin, droog, egaal | Gezond: goed mengsel en ontsteking | Niets |
+| Lichtgrijs / grijze as | Vaak normaal bij moderne 2-takt-olie | Olie-additieven controleren als de laag dik/verhard is |
+| Droog zwart / roet | Te rijk of zwakke vonk | Sproeier kleiner, luchtfilter checken, vonk controleren |
+| Zwart én nat / olieachtig | **Te veel olie** (mengverhouding/oliepomp of lekkende krukaskeering) | Mengverhouding/oliepomp controleren; carterdruk-test bij vraag tussen |
+| Wit / krijtwit of gebladderdee neus | **Te arm of te heet — "GEVAAR"** | Direct stoppen; valse lucht checken; sproeier rijker en een graad kouder |
+| Gebladderde of gesmolten neus | Oververhitting / pre-ignition | Niet opnieuw starten; cilinder en zuiger inspecteren |
+
+### Leesprocedure (de stap die vaak fout gaat)
+warm rijden → 30-60 s **onder belasting** op ¾ tot volgas → **contact af terwijl je nog onder belasting bent** → laten afkoelen → bougie eruit → **isolatorneus lezen, niet de elektrode-tip**. Na lang stationair draaien ziet elke bougie te donker: dan zat de neus onder 450 C en reinigt niet.
+
+### Bronnen
+ngksparkplugs.com/resources/spark-plug-basics · /understanding-spark-plug-heat-range · ngk.com heat-range 2 · ngk.com.au heat-range · gsparkplug.com "Identifying Spark Plugs" · vespa-ciao.nl "bougies aflezen" · ms-marshal.com 2-stroke-Colour-Diagnosis · scooterforum.net #114459.
+
+**App-koppeling:** sectie 5 "BOUGIE LEZEN" in de carburateur-tab van de Afstelhulp (PLUG_READING / PLUG_HEAT_INFO / PLUG_CODE_INFO in src/lib/afstel.ts).
+
+## 8. Statusupdate kennisbank (november 2026)
+
+- Nieuw: sectie 6 (ECU/CDI-ontgrenzing, deels geverifieerd) en sectie 7 (bougie: NGK-kennis, overwegend geverifieerd).
+- Nieuw in de app: vertanding-suggesties per doel (buildGearSuggestions), bougie-hittegraadinfo in de carb-tab, Afstel-log als context voor de diagnose-chat.
+- Op de korte-termijnlijst: GPS-verificatie van een afstelling (prestatie voor/na in de rijlog), de afstelplan-PDF, en het daadwerkelijk deployen van de diagnose-chat-Edge-Function met de secties hierboven.
+- Waar "niet geverifieerd" of "conflict" staat, toont de app dit als richtlijn, niet als vaststaand feit.

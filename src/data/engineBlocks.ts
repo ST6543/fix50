@@ -99,7 +99,7 @@ export const ENGINE_BLOCKS: EngineBlock[] = [
     stockCarbMm: [16, 17.5, 19, 21, 24],
     stockPowerband: [7000, 8500],
     plugCode: 'BRxES',
-    restrictors: ['uitlaatprop/vernauwing in het spruitstuk', 'begrensde CDI/ECU (Euro4/5 = ECU-flash nodig)'],
+    restrictors: ['uitlaatprop/vernauwing in het spruitstuk', 'Euro4/5: elektronische toerentalbegrenzing via ECU — zie kennisbanksectie ECU (B5-draad of vervangende ECU)'],
     kits: [
       { cc: 50, note: 'DR / Airsal / MVT Iron Max / Polini 50' },
       { cc: 70, note: 'Straat: Airsal / Top Performances / Polini gietijzer-alu' },
@@ -124,7 +124,7 @@ export const ENGINE_BLOCKS: EngineBlock[] = [
     stockCarbMm: [16, 17.5, 19],
     stockPowerband: [7000, 8500],
     plugCode: 'BRxES',
-    restrictors: ['uitlaatprop/vernauwing', 'begrensd uitlaatspruitstuk', 'CDI/ECU-begrenzing'],
+    restrictors: ['uitlaatprop/vernauwing', 'begrensd uitlaatspruitstuk', 'Begrensde CDI/ECU (D50B0 Euro4: vervangende unit is de gangbare route)'],
     kits: [
       { cc: 50, note: 'DR / DMP / Airsal' },
       { cc: 70, note: 'Airsal 70 / Top Performances / Malossi Sport / Polini' },

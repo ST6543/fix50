@@ -1,12 +1,12 @@
 /** Tests voor de blokken-kennisbank (dataset-integriteit + koppeling met de afstelhulp). */
-import {
-  ENGINE_BLOCKS,
-  findBlockFromText,
-} from '../src/data/engineBlocks';
+import { readFileSync } from 'fs';
+import { ENGINE_BLOCKS, findBlockFromText } from '../src/data/engineBlocks';
 import {
   calculateCarb,
   ENGINE_FAMILIES,
   CVT_ENGINE_PRESETS,
+  PLUG_HEAT_INFO,
+  PLUG_CODE_INFO,
 } from '../src/lib/afstel';
 
 describe('ENGINE_BLOCKS — dataset-integriteit', () => {
@@ -83,5 +83,37 @@ describe('koppelingsniveaus met de afstelhulp-modellen', () => {
 
   test('CVT-presetlijst bevat ook 70cc midrace (gevolg van blokken-completie)', () => {
     expect(CVT_ENGINE_PRESETS.map((p) => p.label)).toContain('70cc midrace');
+  });
+});
+
+
+describe('Bougies: hittegraad & bougiecode (kennisbank - sectie 7)', () => {
+  test('PLUG_HEAT_INFO bevat de NGK-regel (hoger getal = kouder) en de 450 C-regel', () => {
+    expect(PLUG_HEAT_INFO.length).toBeGreaterThanOrEqual(4);
+    expect(PLUG_HEAT_INFO.some((t) => t.includes('kouder'))).toBe(true);
+    expect(PLUG_HEAT_INFO.some((t) => t.includes('450'))).toBe(true);
+  });
+
+  test('PLUG_CODE_INFO legt alle codeposities van BRxHS / BRxES uit', () => {
+    expect(PLUG_CODE_INFO.map((c) => c.code)).toEqual(
+      expect.arrayContaining(['B', 'R', 'H', 'E', 'S']),
+    );
+    expect(PLUG_CODE_INFO.some((c) => c.betekenis.includes('hittegraad'))).toBe(true);
+  });
+
+  test('kennisbank-doc bevat de ECU- en NGK-secties met onzekerheidsmarkering', () => {
+    const kennisbank = readFileSync('docs/AFSTEL-KENNISBANK.md', 'utf8');
+    expect(kennisbank).toContain('## 6. ECU/CDI-ontgrenzing');
+    expect(kennisbank).toContain('## 7. Bougies');
+    expect(kennisbank).toContain('Niet geverifieerd');
+    expect(kennisbank.toLowerCase()).toContain('hoger getal = kouder');
+  });
+
+  test('AM6/Derbi-restrictors verwijzen naar de ECU-kennisbank, niet naar "ECU-flash"', () => {
+    const am6 = ENGINE_BLOCKS.find((b) => b.id === 'am6')!;
+    const derbi = ENGINE_BLOCKS.find((b) => b.id === 'derbi')!;
+    expect(am6.restrictors.join(' ')).not.toContain('ECU-flash');
+    expect(am6.restrictors.join(' ')).toContain('ECU');
+    expect(derbi.restrictors.join(' ')).toContain('vervangende unit');
   });
 });
