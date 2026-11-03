@@ -131,6 +131,37 @@ export async function getMaintenanceContext(
   };
 }
 
+export async function getTuningContext(serviceClient: { from: Function }, scooterId: string): Promise<string[]> {
+  const { data, error } = await serviceClient
+    .from('tuning_changes')
+    .select('created_at, part, old_value, new_value, result')
+    .eq('scooter_id', scooterId)
+    .order('created_at', { ascending: false })
+    .limit(5);
+  if (error) return [];
+  return formatTuningContext((data ?? []) as TuningRecord[]);
+}
+
+export interface TuningRecord {
+  created_at?: string | null;
+  part?: string | null;
+  old_value?: string | null;
+  new_value?: string | null;
+  result?: string | null;
+}
+
+/** Pure formatter: "part old_value → new_value, gevolg" — testbaar in jest. */
+export function formatTuningContext(recs: TuningRecord[]): string[] {
+  return recs.map((r) => {
+    const datum = r.created_at ? `${r.created_at.slice(0, 10)}` : '';
+    const verandering = r.old_value
+      ? `${r.part ?? 'tuning'}: ${r.old_value} → ${r.new_value ?? '?'}`
+      : `${r.part ?? 'tuning'}: ${r.new_value || 'toegepast'}`;
+    const gevolg = r.result ? `, gevolg: ${r.result}` : '';
+    return `${datum} ${verandering}${gevolg}`.trim();
+  });
+}
+
 export function formatDiagnosisForPrompt(rows: SearchedDiagnosis[]): string {
   if (rows.length === 0) return '(geen relevante FIX50-diagnoserecords gevonden)';
   return rows

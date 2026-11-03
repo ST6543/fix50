@@ -4,6 +4,7 @@
  * _shared-modules pure TypeScript zijn).
  */
 import { buildBlockContext, formatBlockForPrompt, pickEngineBlock } from '../supabase/functions/_shared/blocks';
+import { formatTuningContext } from '../supabase/functions/_shared/context';
 import { buildSystemPrompt } from '../supabase/functions/_shared/prompt';
 import { ENGINE_BLOCKS } from '../src/data/engineBlocks';
 
@@ -92,5 +93,42 @@ describe('buildSystemPrompt — blokken-sectie', () => {
     const p = buildSystemPrompt(baseArgs);
     expect(p).toContain('schakelblok (AM6/Derbi)');
     expect(p).toContain('NOOIT');
+  });
+});
+
+describe('formatTuningContext (recente tuningwijzigingen naar de chat)', () => {
+  const recs = [
+    {
+      created_at: '2026-11-02T18:40:00.000Z',
+      part: 'Rollen (vario)',
+      old_value: '9,5gr',
+      new_value: '12,5gr',
+      result: 'Toegepast via Afstelhulp-suggestie',
+    },
+    {
+      created_at: '2026-11-01T09:15:00.000Z',
+      part: 'Voortandwiel',
+      old_value: null,
+      new_value: '12 T',
+      result: null,
+    },
+  ];
+
+  test('oude en nieuwe waarde en gevolg worden samengevat', () => {
+    const out = formatTuningContext(recs);
+    expect(out[0]).toContain('2026-11-02');
+    expect(out[0]).toContain('9,5gr → 12,5gr');
+    expect(out[0]).toContain('gevolg: Toegepast');
+  });
+
+  test('zonder oude waarde valt het terug op de nieuwe', () => {
+    const out = formatTuningContext([recs[1]!]);
+    expect(out[0]).toContain('Voortandwiel');
+    expect(out[0]).toContain('12 T');
+    expect(out[0]).not.toContain('→');
+  });
+
+  test('lege input levert lege context voor de prompt', () => {
+    expect(formatTuningContext([])).toEqual([]);
   });
 });

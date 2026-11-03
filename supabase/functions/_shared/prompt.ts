@@ -12,6 +12,8 @@ export function buildSystemPrompt(args: {
   maintenance: { recent: string[]; openReminders: string[] };
   /** Compact blok-profiel uit de FIX50-blokkenkennisbank (null = niet herkend). */
   blockContext?: string | null;
+  /** Laatste tuningwijzigingen (strings, klaar voor prompt). */
+  tuningContext?: string[];
 }): string {
   const scooterBlock = args.scooter
     ? [
@@ -27,6 +29,9 @@ export function buildSystemPrompt(args: {
         .filter(Boolean)
         .join('\n')
     : 'Geen voertuig geselecteerd.';
+
+  const tuningBlock =
+    args.tuningContext && args.tuningContext.length > 0 ? args.tuningContext.join('; ') : null;
 
   const maintenanceBlock =
     args.maintenance.recent.length > 0 || args.maintenance.openReminders.length > 0
@@ -59,7 +64,10 @@ VOERTUIGCONTEXT:
 ${scooterBlock}
 
 ONDERHOUDSCONTEXT:
-${maintenanceBlock}${args.blockContext ? `
+${maintenanceBlock}${tuningBlock ? `
+
+RECENTE TUNINGWIJZIGINGEN (Afstelhulp-log; oudste data is relevante context):
+${tuningBlock}` : ''}${args.blockContext ? `
 
 BLOKKEN-KENNISBANK (FIX50 Afstelhulp; richtlijnen, geen garantie):
 ${args.blockContext}` : ''}`;

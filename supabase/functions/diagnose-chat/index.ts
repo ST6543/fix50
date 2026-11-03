@@ -13,6 +13,7 @@ import { buildBlockContext } from '../_shared/blocks.ts';
 import {
   formatDiagnosisForPrompt,
   getMaintenanceContext,
+  getTuningContext,
   getRecentMessages,
   getScooterContext,
   searchWithFallback,
@@ -117,6 +118,7 @@ Deno.serve(async (req: Request) => {
   const maintenance = scooter
     ? await getMaintenanceContext(admin as never, scooter.id)
     : { recent: [], openReminders: [] };
+  const tuningContext = scooter ? await getTuningContext(admin as never, scooter.id) : [];
 
   // Gebruikersbericht opslaan vóór de AI-call (ook bij timeout zit het gesprek vast in de geschiedenis).
   await admin.from('chat_messages').insert({ chat_session_id: sessionId, role: 'user', message });
@@ -130,7 +132,7 @@ Deno.serve(async (req: Request) => {
   let usedFallback = false;
 
   const turns = [
-    { role: 'system' as const, content: buildSystemPrompt({ scooter, diagnosisRows, maintenance, blockContext: buildBlockContext(scooter) }) },
+    { role: 'system' as const, content: buildSystemPrompt({ scooter, diagnosisRows, maintenance, tuningContext, blockContext: buildBlockContext(scooter) }) },
     ...recent.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
     { role: 'user' as const, content: buildUserTurn(message, diagnosisBlock) },
   ];
