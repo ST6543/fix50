@@ -11,6 +11,8 @@ import { AlertCircleIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import { computeMetrics, gpsQuality, isStationaryEnough, smoothSpeed, type GpsSample } from './gps';
 import * as perfService from '@/services/performance';
+import { getActiveSetup } from '@/services/tuning';
+import type { TuningSetup, UUID } from '@/types';
 import { performanceRunSchema } from '@/lib/validation';
 import { colors, fonts, spacing, typography } from '@/theme';
 
@@ -25,6 +27,9 @@ export default function PerformanceRunScreen() {
   const [elapsed, setElapsed] = useState(0);
   const [distance, setDistance] = useState(0);
   const [gpsStatus, setGpsStatus] = useState('GPS zoeken…');
+  // Actieve tuningsetup (voor koppeling van de meting aan de afstelling).
+  const [activeSetup, setActiveSetup] = useState<TuningSetup | null>(null);
+  const [setupId, setSetupId] = useState<UUID | null>(null);
 
   const samplesRef = useRef<GpsSample[]>([]);
   const smoothedRef = useRef(0);
@@ -36,6 +41,28 @@ export default function PerformanceRunScreen() {
       watchRef.current?.remove();
     };
   }, []);
+
+  // Koppel de actieve setup van deze scooter: metingen horen bij de huidige afstelling.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setSetupId(null);
+      setActiveSetup(null);
+      if (!activeScooter) return;
+      try {
+        const setup = await getActiveSetup(activeScooter.id);
+        if (!cancelled) {
+          setActiveSetup(setup);
+          setSetupId(setup?.id ?? null);
+        }
+      } catch {
+        // Zonder setups meet je gewoon; er is dan niets om aan te koppelen.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeScooter?.id]);
 
   async function prepare() {
     setPhase('gps');
@@ -160,7 +187,7 @@ export default function PerformanceRunScreen() {
     try {
       const saved = await perfService.saveRun({
         scooterId: activeScooter?.id ?? null,
-        setupId: null,
+        setupId,
         run: {
           ...check.data,
           gps_quality: gpsQuality(samples.map((s) => s.accuracy)),
@@ -222,6 +249,11 @@ export default function PerformanceRunScreen() {
               Je meet{activeScooter ? ` met ${activeScooter.name}` : ''}. Rijd vanaf stilstand vol gas en stop de
               meting als je op topsnelheid zit.
             </Text>
+            <Text style={styles.setupTag}>
+              {activeSetup
+                ? `Gekoppeld aan setup: ${activeSetup.name}`
+                : 'Geen actieve tuningsetup — meting wordt niet gekoppeld aan een afstelling.'}
+            </Text>
           </Card>
           <Button label="START TEST" onPress={start} disabled={phase === 'saving'} />
           <Button label="Opslaan & stoppen" variant="secondary" onPress={stopAndSave} disabled={phase === 'saving'} />
@@ -272,6 +304,7 @@ const styles = StyleSheet.create({
   preTitle: { color: colors.danger, fontWeight: '800', fontSize: 18 },
   preBody: { color: colors.text, lineHeight: 22 },
   gpsStatus: { color: colors.primary, textAlign: 'center', fontWeight: '700', marginBottom: spacing.s },
+  setupTag: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   gpsHint: { color: colors.textMuted, lineHeight: 19, marginBottom: spacing.m },
   runWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   liveTag: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.s },

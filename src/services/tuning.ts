@@ -15,6 +15,12 @@ export async function listSetups(scooterId: UUID): Promise<TuningSetup[]> {
   );
 }
 
+/** De actieve setup van een scooter, of null als er (nog) geen actief is. */
+export async function getActiveSetup(scooterId: UUID): Promise<TuningSetup | null> {
+  const setups = await listSetups(scooterId);
+  return setups.find((s) => s.is_active) ?? null;
+}
+
 export async function createSetup(
   scooterId: UUID,
   name: string,
