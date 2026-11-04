@@ -15,7 +15,7 @@
  */
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
-import { PLUG_CONDITIONS, type PlugConditionKey } from '../_shared/plugConditions.ts';
+import { PLUG_CONDITIONS, PLUG_CONDITION_KEYS, type PlugConditionKey } from '../_shared/plugConditions.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -141,7 +141,17 @@ Deno.serve(async (req: Request) => {
     });
     if (!res.ok) {
       console.error(`plug-photo: provider status ${res.status}`);
-      return errorJson('De bougie-analyse is tijdelijk niet beschikbaar.', 502, 'ai_error');
+      // Bijv. Groq verwijderde de vision-modellen (llama-4) — configuratie nodig:
+      // zet AI_API_BASE/AI_API_KEY op een provider mét vision en AI_VISION_MODEL op
+      // een bestaand vision-model. Tot die tijd keert de functie netjes 502 terug.
+      const visionMissing = res.status === 404;
+      return errorJson(
+        visionMissing
+          ? 'Bougie-foto-analyse is niet ingesteld bij de provider (vision-model ontbreekt). Run de andere functies in de app; de foto-analyse volgt zodra een vision-model is ingesteld.'
+          : 'De bougie-analyse is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
+        502,
+        visionMissing ? 'vision_model_missing' : 'ai_error',
+      );
     }
     const data = await res.json();
     aiContent = data?.choices?.[0]?.message?.content ?? null;

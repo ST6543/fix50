@@ -318,5 +318,7 @@ ngksparkplugs.com/resources/spark-plug-basics · /understanding-spark-plug-heat-
 
 - Nieuw: sectie 6 (ECU/CDI-ontgrenzing, deels geverifieerd) en sectie 7 (bougie: NGK-kennis, overwegend geverifieerd).
 - Nieuw in de app: vertanding-suggesties per doel (buildGearSuggestions), bougie-hittegraadinfo in de carb-tab, Afstel-log als context voor de diagnose-chat.
-- Op de korte-termijnlijst: GPS-verificatie van een afstelling (prestatie voor/na in de rijlog), de afstelplan-PDF, en het daadwerkelijk deployen van de diagnose-chat-Edge-Function met de secties hierboven.
+- Gelive (nov 2026): plug-photo (bougie-foto-analyse met vaste NGK-adviesmapping), diagnose-chat met tuningcontext, en GPS-metingen die automatisch aan de actieve setup koppelen; Tuningpaspoort-PDF bevat setups, metingen en het wijzigingenregister.
+- Plug-photo live-status: de functie draait, maar de huidige provider (Groq) heeft géén vision-modellen meer (llama-4 is verwijderd). Tot er een vision-provider is ingesteld (secrets AI_API_BASE/AI_API_KEY/AI_VISION_MODEL), keert foto-analyse netjes 502 terug met uitleg; de rest van de Afstelhulp werkt gewoon.
+- Op de korte-termijnlijst: vision-provider voor plug-photo instellen.
 - Waar "niet geverifieerd" of "conflict" staat, toont de app dit als richtlijn, niet als vaststaand feit.
