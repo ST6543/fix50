@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line, Polyline, Rect } from 'react-native-svg';
 
-import { Badge, Button, Card, Chip, ChipRow } from '@/components/ui';
+import { Badge, Button, Card, Chip, ChipRow, Slider } from '@/components/ui';
 import { useScooters } from '@/hooks/useScooters';
 import * as ImagePicker from 'expo-image-picker';
 import * as tuningService from '@/services/tuning';
@@ -374,23 +374,31 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                   Geen blok gekozen: advies werkt dan universeel, zonder blok-specifieke bougie of stages.
                 </Text>
               )}
-              <Text style={styles.label}>Cilinderinhoud</Text>
-              <ChipRow>
-                {CC_OPTIONS.map((v) => (
-                  <Chip key={v} label={`${v} cc`} active={cc === v} onPress={() => setCc(v)} />
-                ))}
-              </ChipRow>
+              <Slider
+                label="Cilinderinhoud"
+                value={Math.max(0, CC_OPTIONS.indexOf(cc))}
+                min={0}
+                max={CC_OPTIONS.length - 1}
+                step={1}
+                format={(i) => `${CC_OPTIONS[Math.round(i)]} cc`}
+                hint="Groter volume vraagt een ruimere sproeier en een koudere bougie."
+                onChange={(i) => setCc(CC_OPTIONS[Math.round(i)] ?? cc)}
+              />
               <Text style={styles.label}>Materiaal cilinder</Text>
               <ChipRow>
                 <Chip label="Gietijzer" active={material === 'ijzer'} onPress={() => setMaterial('ijzer')} />
                 <Chip label="Aluminium" active={material === 'alu'} onPress={() => setMaterial('alu')} />
               </ChipRow>
-              <Text style={styles.label}>Carburateur</Text>
-              <ChipRow>
-                {CARB_MM_OPTIONS.map((v) => (
-                  <Chip key={v} label={`${v} mm`} active={carbMm === v} onPress={() => setCarbMm(v)} />
-                ))}
-              </ChipRow>
+              <Slider
+                label="Carburateur"
+                value={Math.max(0, CARB_MM_OPTIONS.indexOf(carbMm))}
+                min={0}
+                max={CARB_MM_OPTIONS.length - 1}
+                step={1}
+                format={(i) => `${String(CARB_MM_OPTIONS[Math.round(i)]).replace('.', ',')} mm`}
+                hint="Grotere doorlaat = meer mengsel bij volgas, maar lastiger stationair afstellen."
+                onChange={(i) => setCarbMm(CARB_MM_OPTIONS[Math.round(i)] ?? carbMm)}
+              />
               <Text style={styles.label}>Uitlaat / setup</Text>
               <ChipRow>
                 {(Object.keys(CARB_SETUP_LABELS) as CarbSetupType[]).map((t) => (
@@ -545,6 +553,28 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
           </>
         ) : tab === 'cvt' && !isShakeBlock ? (
           <>
+            <Card style={styles.liveCard}>
+              <View style={styles.liveHead}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.liveEyebrow}>LIVE AFSTELLING</Text>
+                  <Text style={styles.liveTitle}>{model.verdict}</Text>
+                </View>
+                <Badge
+                  label={cvtSpeedLabel(model.topSpeed)}
+                  tone={model.balanceScore >= 7 ? 'success' : model.balanceScore >= 4 ? 'warning' : 'danger'}
+                />
+              </View>
+              <View style={styles.statsGrid}>
+                <StatTile label="LAUNCH" value={`${model.launchScore.toFixed(1)}/10`} />
+                <StatTile label="BALANS" value={`${model.balanceScore.toFixed(1)}/10`} />
+                <StatTile label="SHIFT-TOEREN" value={`${Math.round(model.shiftRpm)} rpm`} />
+              </View>
+              <View style={styles.liveTrack}>
+                <View style={[styles.liveFill, { width: `${Math.max(4, Math.min(100, model.balanceScore * 10))}%` }]} />
+              </View>
+              <Text style={styles.liveHint}>Schuif hieronder en deze cijfers veranderen direct mee.</Text>
+            </Card>
+
             <NumberedHeader n="1" title="EERST: WELK TYPE OVERBRENGING?" subtitle="Snaarlengte hoort bij het cartertype." />
             <Card>
               <View style={{ gap: spacing.s }}>
@@ -569,15 +599,18 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
 
             <NumberedHeader n="2" title="JE CVT SETUP" />
             <Card>
-              <Stepper
+              <Slider
                 label="Rolgewicht"
-                value={cvt.roller.toFixed(1).replace('.', ',')}
-                unit="g"
+                value={cvt.roller}
+                min={3}
+                max={13}
                 step={0.5}
-                onDec={() => setCvt((s) => ({ ...s, roller: Math.max(3, Math.round((s.roller - 0.5) * 2) / 2) }))}
-                onInc={() => setCvt((s) => ({ ...s, roller: Math.min(13, Math.round((s.roller + 0.5) * 2) / 2) }))}
+                unit="g"
+                decimals={1}
+                target={symptoms.length > 0 ? userDiag.suggested.roller : null}
+                hint="Lichter = meer toerental, later opschakelen. Zwaarder = eerder opschakelen."
+                onChange={(v) => setCvt((s) => ({ ...s, roller: v }))}
               />
-              <Text style={[styles.hint, { marginTop: spacing.xs }]}>Lichter = meer toerental, later opschakelen. Zwaarder = eerder opschakelen.</Text>
               <Text style={[styles.label, { marginTop: spacing.s }]}>Drukveer</Text>
               <ChipRow>
                 {CVT_SPRINGS.map((s, i) => (
@@ -585,17 +618,17 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 ))}
               </ChipRow>
               <Text style={styles.hint}>Strakker = houdt hem langer kort, maar kan top kosten.</Text>
-              <View style={[{ marginTop: spacing.s }]}>
-                <Stepper
-                  label="V-snaar lengte"
-                  value={cvt.belt}
-                  unit="mm"
-                  step={5}
-                  hint={`Voor gekozen overbrenging logisch rond: ±${CVT_CARTER_PRESETS[carterIndex]!.idealBelt}mm`}
-                  onDec={() => setCvt((s) => ({ ...s, belt: Math.max(700, s.belt - 5) }))}
-                  onInc={() => setCvt((s) => ({ ...s, belt: Math.min(830, s.belt + 5) }))}
-                />
-              </View>
+              <Slider
+                label="V-snaar lengte"
+                value={cvt.belt}
+                min={700}
+                max={830}
+                step={5}
+                unit="mm"
+                target={symptoms.length > 0 ? userDiag.suggested.belt : CVT_CARTER_PRESETS[carterIndex]!.idealBelt}
+                hint={`Logisch rond de ideale snaar voor deze overbrenging: ±${CVT_CARTER_PRESETS[carterIndex]!.idealBelt}mm.`}
+                onChange={(v) => setCvt((s) => ({ ...s, belt: v }))}
+              />
               <Text style={[styles.label, { marginTop: spacing.s }]}>Trekveren</Text>
               <ChipRow>
                 {[1, 2, 3].map((v) => (
@@ -608,42 +641,103 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                   <Chip key={p.label} label={p.label} active={cvt.pbMin === p.min && cvt.pbMax === p.max} onPress={() => applyPreset(i)} />
                 ))}
               </ChipRow>
-              <View style={{ marginTop: spacing.s }}>
-                <Stepper
-                  label="Powerband begin"
-                  value={cvt.pbMin}
-                  unit="rpm"
-                  step={100}
-                  onDec={() => setCvt((s) => ({ ...s, pbMin: Math.max(5000, Math.min(s.pbMax - 500, s.pbMin - 100)) }))}
-                  onInc={() => setCvt((s) => ({ ...s, pbMin: Math.min(s.pbMax - 500, s.pbMin + 100) }))}
-                />
-                <Stepper
-                  label="Powerband einde"
-                  value={cvt.pbMax}
-                  unit="rpm"
-                  step={100}
-                  onDec={() => setCvt((s) => ({ ...s, pbMax: Math.max(s.pbMin + 500, s.pbMax - 100) }))}
-                  onInc={() => setCvt((s) => ({ ...s, pbMax: Math.min(12000, Math.max(s.pbMin + 500, s.pbMax + 100)) }))}
-                />
-              </View>
+              <Slider
+                label="Powerband begin"
+                value={cvt.pbMin}
+                min={5000}
+                max={Math.max(5500, cvt.pbMax - 500)}
+                step={100}
+                format={(v) => `${v.toLocaleString('nl-NL')} rpm`}
+                hint="Hier begint je motor goed te trekken; onder dit toerental laat de vario hem zakken."
+                onChange={(v) => setCvt((s) => ({ ...s, pbMin: Math.min(s.pbMax - 500, v) }))}
+              />
+              <Slider
+                label="Powerband einde"
+                value={cvt.pbMax}
+                min={Math.min(11500, cvt.pbMin + 500)}
+                max={12000}
+                step={100}
+                format={(v) => `${v.toLocaleString('nl-NL')} rpm`}
+                hint="Boven dit toerental levert extra toeren weinig extra snelheid meer op."
+                onChange={(v) => setCvt((s) => ({ ...s, pbMax: Math.max(s.pbMin + 500, v) }))}
+              />
             </Card>
 
-            <NumberedHeader n="3" title="SNELHEID VS TOERENTAL" subtitle={`Powerband: ${cvt.pbMin}–${cvt.pbMax} rpm · ${CVT_CARTER_PRESETS[carterIndex]!.label}`} />
+            <NumberedHeader n="3" title="AFSTELPLAN" subtitle="Werk in deze volgorde — één wijziging per testrit." />
+            <Card>
+              {([
+                {
+                  key: 'roller',
+                  title: 'Rolgewicht',
+                  now: `${cvt.roller.toFixed(1).replace('.', ',')} g`,
+                  advies: `${userDiag.suggested.roller.toFixed(1).replace('.', ',')} g`,
+                  why: 'Bepaalt je toerental bij optrekken. Eerst dit goed hebben, dan de rest.',
+                },
+                {
+                  key: 'springIndex',
+                  title: 'Drukveer',
+                  now: cvtSpringLabel(cvt.springIndex),
+                  advies: cvtSpringLabel(userDiag.suggested.springIndex),
+                  why: 'Houdt de riem langer onderin: strakker = meer toeren, minder top.',
+                },
+                {
+                  key: 'belt',
+                  title: 'V-snaar',
+                  now: `${cvt.belt} mm`,
+                  advies: `${userDiag.suggested.belt} mm`,
+                  why: 'Verkeerde lengte kost snelheid of laat de riem slippen.',
+                },
+                {
+                  key: 'clutch',
+                  title: 'Trekveren',
+                  now: cvtClutchLabel(cvt.clutch),
+                  advies: cvtClutchLabel(userDiag.suggested.clutch),
+                  why: 'Bepaalt wanneer de koppeling aangrijpt bij wegrijden.',
+                },
+              ] as const).map((row, i) => {
+                const ok = row.now === row.advies;
+                return (
+                  <View key={row.key} style={i > 0 ? styles.planRowSpaced : styles.planRow}>
+                    <View style={[styles.planDot, ok && styles.planDotOk]}>
+                      <Text style={[styles.planDotText, ok && styles.planDotTextOk]}>{ok ? '✓' : i + 1}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.planHead}>
+                        <Text style={styles.planTitle}>{row.title}</Text>
+                        <Text style={[styles.planValue, !ok && styles.planValueOff]}>
+                          {ok ? `op advies (${row.now})` : `${row.now} → ${row.advies}`}
+                        </Text>
+                      </View>
+                      <Text style={styles.planWhy}>{row.why}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+              <View style={styles.divider} />
+              <Text style={styles.hint}>
+                Stap 5 is altijd een testrit van minimaal 2 km met een schone bougie, daarna kleur lezen. Pas daarna de
+                volgende wijziging toe.
+              </Text>
+              {symptoms.length === 0 ? (
+                <Text style={styles.planHintMuted}>
+                  Kies onderaan bij Symptomen wat je scooter doet — dan vult het plan hierboven concrete advieswaarden in.
+                </Text>
+              ) : (
+                <Button label="Afstelplan toepassen" onPress={applyCvtSuggestion} style={{ marginTop: spacing.m }} />
+              )}
+            </Card>
+
+            <NumberedHeader n="4" title="SNELHEID VS TOERENTAL" subtitle={`Powerband: ${cvt.pbMin}–${cvt.pbMax} rpm · ${CVT_CARTER_PRESETS[carterIndex]!.label}`} />
             <Card>
               <View style={styles.verdictRow}>
-                <Badge label={model.verdict} tone={model.balanceScore >= 7 ? 'success' : model.balanceScore >= 4 ? 'warning' : 'danger'} />
+                <Text style={styles.labelSmall}>TOERENTAL OVER SNELHEID</Text>
                 <Text style={styles.verdictSpeed}>{cvtSpeedLabel(model.topSpeed)}</Text>
-              </View>
-              <View style={styles.statsGrid}>
-                <StatTile label="LAUNCH" value={`${model.launchScore.toFixed(1)}/10`} />
-                <StatTile label="BALANS" value={`${model.balanceScore.toFixed(1)}/10`} />
-                <StatTile label="SHIFT-TOEREN" value={`${Math.round(model.shiftRpm)} rpm`} />
               </View>
               <Text style={styles.hint}>{model.advice}</Text>
               <CvtChart data={model.data} pbMin={cvt.pbMin} pbMax={cvt.pbMax} />
             </Card>
 
-            <NumberedHeader n="4" title="SYMPTOMEN INVULLEN" subtitle="Kies wat je scooter doet, dan krijg je de meest logische afstelrichting." />
+            <NumberedHeader n="5" title="SYMPTOMEN INVULLEN" subtitle="Kies wat je scooter doet, dan krijg je de meest logische afstelrichting." />
             <Card>
               <View style={{ gap: spacing.s }}>
                 {CVT_SYMPTOMS.map((s) => (
@@ -737,24 +831,26 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
 
             <NumberedHeader n="2" title="JE COMBINATIE" subtitle="Voor = kettingrondsel · achter = wiel-tandwiel." />
             <Card>
-              <Stepper
-                label="Voorste tandwiel"
+              <Slider
+                label="Voorste tandwiel (rondsel)"
                 value={gearFront}
-                unit="T"
+                min={10}
+                max={17}
                 step={1}
-                onDec={() => setGearFront((v) => Math.max(10, v - 1))}
-                onInc={() => setGearFront((v) => Math.min(17, v + 1))}
+                unit="T"
+                hint="Eén tand groter voor = langere gearing, meestal meer top en minder trek."
+                onChange={(v) => setGearFront(v)}
               />
-              <View style={styles.divider} />
-              <Stepper
-                label="Achterste tandwiel"
+              <Slider
+                label="Achterste tandwiel (wiel)"
                 value={gearRear}
-                unit="T"
+                min={35}
+                max={75}
                 step={1}
-                onDec={() => setGearRear((v) => Math.max(35, v - 1))}
-                onInc={() => setGearRear((v) => Math.min(75, v + 1))}
+                unit="T"
+                hint="Eén tand kleiner achter = langere gearing; groter achter = meer trek."
+                onChange={(v) => setGearRear(v)}
               />
-              <Text style={styles.hint}>Bereik: rondsel 10-17 T · wiel-tandwiel 35-75 T.</Text>
               <View style={styles.divider} />
               <Text style={styles.labelSmall}>VERHOUDING</Text>
               <Text style={styles.bigValue}>{gearing.ratio.toFixed(2)}</Text>
@@ -823,6 +919,13 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
 }
 
 const styles = StyleSheet.create({
+  liveCard: { marginBottom: spacing.m, backgroundColor: colors.surfaceAlt },
+  liveHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.m },
+  liveEyebrow: { color: colors.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
+  liveTitle: { color: colors.text, fontSize: 17, fontWeight: '800', fontFamily: fonts.display, marginTop: 2 },
+  liveTrack: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceHigh, marginTop: spacing.s, overflow: 'hidden' },
+  liveFill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
+  liveHint: { color: colors.textSubtle, fontSize: 11.5, marginTop: spacing.s },
   logNoteCard: { marginBottom: spacing.m },
   logNote: { color: colors.success, fontWeight: '700', fontSize: 13 },
   blockInfo: { marginTop: spacing.s, backgroundColor: colors.surfaceAlt, borderRadius: radii.s, borderWidth: 1, borderColor: colors.borderSoft, padding: spacing.s },
@@ -894,6 +997,27 @@ const styles = StyleSheet.create({
   disclaimerCard: { marginTop: spacing.l },
   disclaimer: { color: colors.textSubtle, fontSize: 12, lineHeight: 18 },
   disclaimerBrand: { color: colors.textSubtle, fontSize: 12, marginTop: spacing.s, fontStyle: 'italic' },
+  planRow: { flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' },
+  planRowSpaced: { flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start', marginTop: spacing.m },
+  planDot: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planDotOk: { borderColor: colors.success, backgroundColor: 'rgba(34,197,94,0.12)' },
+  planDotText: { color: colors.textMuted, fontSize: 12, fontWeight: '800' },
+  planDotTextOk: { color: colors.success },
+  planHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.s },
+  planTitle: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  planValue: { color: colors.success, fontSize: 12.5, fontWeight: '700' },
+  planValueOff: { color: colors.primary },
+  planWhy: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 1 },
+  planHintMuted: { color: colors.textSubtle, fontSize: 12, lineHeight: 17, marginTop: spacing.s },
   changed: { color: colors.primary, fontWeight: '800' },
   compareRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
   compareName: { width: 74, color: colors.textMuted, fontSize: 13 },

@@ -1,5 +1,5 @@
 /** FIX50 UI-kit — één stijl voor alle schermen (Stitch: plat, zinc, oranje accent, display-cijfers). */
-import React from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -326,6 +326,132 @@ export function MetricCard({
   );
 }
 
+// ── Slider — sleepbare baan met optionele doelmarkering ─────
+export function Slider({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  unit,
+  hint,
+  target,
+  format,
+  decimals = 0,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+  hint?: string;
+  /** Aanbevolen waarde uit het afsteladvies — verschijnt als streepje op de baan. */
+  target?: number | null;
+  /** Eigen weergave van de waarde (bijv. "8,5 g" of "7.600 rpm"). */
+  format?: (v: number) => string;
+  decimals?: number;
+  disabled?: boolean;
+  onChange: (v: number) => void;
+}) {
+  const trackRef = useRef<View>(null);
+  const [trackX, setTrackX] = useState(0);
+  const [trackW, setTrackW] = useState(0);
+  const [dragging, setDragging] = useState(false);
+
+  const span = max - min || 1;
+  const ratio = Math.max(0, Math.min(1, (value - min) / span));
+  const targetRatio =
+    typeof target === 'number' && Number.isFinite(target) ? Math.max(0, Math.min(1, (target - min) / span)) : null;
+
+  const snap = useCallback(
+    (raw: number) => {
+      const stepped = Math.round((raw - min) / step) * step + min;
+      return Number(Math.min(max, Math.max(min, stepped)).toFixed(6));
+    },
+    [min, max, step],
+  );
+
+  const measure = useCallback(() => {
+    trackRef.current?.measure?.((_x, _y, w, _h, pageX) => {
+      setTrackX(pageX);
+      setTrackW(w);
+    });
+  }, []);
+
+  const setFromPageX = (pageX: number) => {
+    if (trackW <= 0) return;
+    onChange(snap(min + ((pageX - trackX) / trackW) * span));
+  };
+
+  const onGesture = (e: { nativeEvent: { pageX?: number; locationX?: number } }) => {
+    const { pageX, locationX } = e.nativeEvent;
+    setFromPageX(typeof pageX === 'number' ? pageX : trackX + (locationX ?? 0));
+  };
+
+  const display = format ? format(value) : `${value.toFixed(decimals).replace('.', ',')}${unit ? ` ${unit}` : ''}`;
+
+  return (
+    <View style={[styles.slider, disabled && { opacity: 0.5 }]}>
+      <View style={styles.sliderHead}>
+        <Text style={styles.sliderLabel}>{label}</Text>
+        <View style={styles.sliderValuePill}>
+          <Text style={styles.sliderValue}>{display}</Text>
+        </View>
+      </View>
+      <View
+        ref={trackRef}
+        accessibilityRole="adjustable"
+        accessibilityLabel={label}
+        accessibilityValue={{ min, max, now: value }}
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+        onAccessibilityAction={(e) => {
+          if (e.nativeEvent.actionName === 'increment') onChange(snap(value + step));
+          if (e.nativeEvent.actionName === 'decrement') onChange(snap(value - step));
+        }}
+        onLayout={(e) => {
+          setTrackW(e.nativeEvent.layout.width);
+          measure();
+        }}
+        onStartShouldSetResponder={() => !disabled}
+        onMoveShouldSetResponder={() => !disabled}
+        onResponderGrant={(e) => {
+          setDragging(true);
+          measure();
+          onGesture(e);
+        }}
+        onResponderMove={onGesture}
+        onResponderRelease={() => setDragging(false)}
+        onResponderTerminate={() => setDragging(false)}
+        style={styles.sliderTrackWrap}
+      >
+        <View style={styles.sliderRail} />
+        <View style={[styles.sliderRailFill, { width: ratio * trackW }]} />
+        {targetRatio !== null ? (
+          <View
+            pointerEvents="none"
+            style={[styles.sliderTarget, { left: targetRatio * trackW - 1 }, Math.abs(targetRatio - ratio) < 0.002 && { opacity: 0 }]}
+          />
+        ) : null}
+        <View
+          pointerEvents="none"
+          style={[styles.sliderThumb, dragging && styles.sliderThumbActive, { left: Math.max(0, ratio * trackW - 11) }]}
+        />
+      </View>
+      <View style={styles.sliderScale}>
+        <Text style={styles.sliderScaleText}>{format ? format(min) : `${min}${unit ? ` ${unit}` : ''}`}</Text>
+        {targetRatio !== null && typeof target === 'number' ? (
+          <Text style={styles.sliderTargetText}>{`advies ${format ? format(target) : `${target}${unit ? ` ${unit}` : ''}`}`}</Text>
+        ) : null}
+        <Text style={styles.sliderScaleText}>{format ? format(max) : `${max}${unit ? ` ${unit}` : ''}`}</Text>
+      </View>
+      {hint ? <Text style={styles.sliderHint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
 // ── Input ────────────────────────────────────────────────────
 export function Input({
   label,
@@ -583,4 +709,34 @@ const styles = StyleSheet.create({
     marginBottom: spacing.m,
   },
   chipRow: { paddingHorizontal: spacing.l, paddingVertical: spacing.s },
+  slider: { marginTop: spacing.m },
+  sliderHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.s },
+  sliderLabel: { color: colors.text, fontFamily: fonts.bodySemiBold, fontSize: 13.5, fontWeight: '600' },
+  sliderValuePill: {
+    backgroundColor: colors.primarySubtle,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.m,
+    paddingVertical: 3,
+  },
+  sliderValue: { color: colors.primary, fontFamily: fonts.display, fontSize: 14, fontWeight: '700' },
+  sliderTrackWrap: { height: 34, justifyContent: 'center' },
+  sliderRail: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceHigh },
+  sliderRailFill: { position: 'absolute', height: 6, borderRadius: 3, backgroundColor: colors.primary },
+  sliderTarget: { position: 'absolute', width: 2, height: 18, borderRadius: 1, backgroundColor: colors.textSubtle },
+  sliderThumb: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.text,
+    borderWidth: 3,
+    borderColor: colors.primary,
+  },
+  sliderThumbActive: { transform: [{ scale: 1.12 }] },
+  sliderScale: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
+  sliderScaleText: { color: colors.textSubtle, fontFamily: fonts.body, fontSize: 11 },
+  sliderTargetText: { color: colors.textMuted, fontFamily: fonts.bodySemiBold, fontSize: 11, fontWeight: '600' },
+  sliderHint: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12, lineHeight: 17, marginTop: spacing.xs },
 });
