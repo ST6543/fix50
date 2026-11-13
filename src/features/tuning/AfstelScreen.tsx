@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { AppNav } from '@/navigation/types';
 import Svg, { Line, Polyline, Rect } from 'react-native-svg';
 
 import { Badge, Button, Card, Chip, ChipRow, Input, Slider } from '@/components/ui';
@@ -156,6 +158,7 @@ function Stepper({ label, value, unit, hint, onDec, onInc, step }: {
 }
 
 export default function AfstelScreen({ embedded = false }: { embedded?: boolean }) {
+  const navigation = useNavigation<AppNav>();
   const { setup, activeScooter } = useScooters();
   const [tab, setTab] = useState<'carb' | 'cvt' | 'gear'>('carb');
   const tabSnapshot = tab as 'carb' | 'cvt' | 'gear';
@@ -531,6 +534,12 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
               <Chip key={n} label={n} onPress={() => setNewSetupName(n)} />
             ))}
           </ChipRow>
+          <Button
+            label="Vergelijk opstellingen"
+            variant="secondary"
+            onPress={() => navigation.navigate('SetupComparison')}
+            style={{ marginTop: spacing.s }}
+          />
           {activeSetupId ? (
             <Text style={styles.setupActiveNote}>
               {`Actief: ${setups.find((s) => s.id === activeSetupId)?.name ?? '—'} · GPS-metingen koppelen hieraan`}

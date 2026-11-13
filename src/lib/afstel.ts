@@ -295,6 +295,71 @@ export interface CvtModel {
   bogSeverity: number;
 }
 
+/** Neutrale CVT-stand, gebruikt als een setup geen (volledige) waarden heeft. */
+export const DEFAULT_CVT_STATE: CvtState = {
+  roller: 9.5,
+  springIndex: 1,
+  belt: 765,
+  clutch: 2,
+  pbMin: 7600,
+  pbMax: 9000,
+  carterIndex: 1,
+};
+
+/** Sleutels waarin de Afstelhulp setups exact terugzet; niet voor de verschillentabel. */
+export const SETUP_NUMERIC_KEYS = [
+  'blok_id',
+  'cilinder_cc',
+  'carb_mm',
+  'rollen_g',
+  'drukveer_index',
+  'snaar_mm',
+  'trekveer_index',
+  'powerband_min',
+  'powerband_max',
+  'tandwiel_voor',
+  'tandwiel_achter',
+] as const;
+
+/**
+ * Leest een opgeslagen setup terug naar CVT-state: eerst de numerieke velden,
+ * anders de leesbare waarde ("8,5g", "765mm"), anders de fallback.
+ */
+export function cvtStateFromSetupParts(
+  parts: Record<string, string | number | null> | null | undefined,
+  fallback: CvtState = DEFAULT_CVT_STATE,
+): CvtState {
+  const p = parts ?? {};
+  const num = (key: string): number | null => {
+    const v = p[key];
+    if (v === null || v === undefined || v === '') return null;
+    const parsed = typeof v === 'number' ? v : Number(String(v).replace(',', '.').match(/-?\d+(?:\.\d+)?/)?.[0] ?? NaN);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+  const roller = num('rollen_g') ?? num('Rollen');
+  const spring = num('drukveer_index');
+  const belt = num('snaar_mm') ?? num('V-snaar');
+  const clutch = num('trekveer_index');
+  const pbMin = num('powerband_min');
+  const pbMax = num('powerband_max');
+
+  const nextMin = pbMin !== null ? clamp(pbMin, 5000, 11000) : fallback.pbMin;
+  const nextMax = pbMax !== null ? clamp(pbMax, 5500, 12000) : fallback.pbMax;
+
+  return {
+    roller: roller !== null ? clamp(roller, 3, 13) : fallback.roller,
+    springIndex:
+      spring !== null ? clamp(Math.round(spring), 0, CVT_SPRINGS.length - 1) : fallback.springIndex,
+    belt: belt !== null ? clamp(Math.round(belt), 700, 830) : fallback.belt,
+    clutch: clutch !== null ? clamp(Math.round(clutch), 1, 3) : fallback.clutch,
+    pbMin: Math.min(nextMin, nextMax - 500),
+    pbMax: Math.max(nextMax, nextMin + 500),
+    carterIndex: fallback.carterIndex,
+  };
+}
+
 export function cvtSpringLabel(index: number): string {
   const s = CVT_SPRINGS[index] ?? CVT_SPRINGS[1]!;
   return `${s.label} ${s.detail}`;
