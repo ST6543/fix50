@@ -1,15 +1,16 @@
 /** Afstelhulp — startafstelling carburateur en CVT-richting, naar de klasieke afstelhulp-modellen. */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line, Polyline, Rect } from 'react-native-svg';
 
-import { Badge, Button, Card, Chip, ChipRow, Slider } from '@/components/ui';
+import { Badge, Button, Card, Chip, ChipRow, Input, Slider } from '@/components/ui';
 import { useScooters } from '@/hooks/useScooters';
 import * as ImagePicker from 'expo-image-picker';
 import * as tuningService from '@/services/tuning';
 import { ENGINE_BLOCKS, findBlockFromText } from '@/data/engineBlocks';
 import { colors, fonts, radii, spacing } from '@/theme';
+import type { TuningSetup } from '@/types';
 import { shrinkForScan } from '@/lib/image-shrink';
 import { scanPlugPhoto, type PlugScanResult } from '@/services/plug-scan';
 import {
@@ -174,6 +175,12 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const [gearPresetId, setGearPresetId] = useState<string | null>(null);
   const [logNote, setLogNote] = useState<string | null>(null);
 
+  // ── Testopstellingen: opgeslagen setups, één tik om te wisselen ──
+  const [setups, setSetups] = useState<TuningSetup[]>([]);
+  const [activeSetupId, setActiveSetupId] = useState<string | null>(null);
+  const [newSetupName, setNewSetupName] = useState('');
+  const [setupBusy, setSetupBusy] = useState(false);
+
   const block = ENGINE_BLOCKS.find((b) => b.id === blockId) ?? null;
   const carb = useMemo(
     () => calculateCarb({ cc, carbMm, material, setupType, cooling, engineFamilyId: block?.family ?? 'onbekend' }),
@@ -253,6 +260,148 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
     [gearFront, gearRear, gearPreset],
   );
   const isShakeBlock = block?.transmission === 'schakel';
+
+  // ── Testopstellingen laden ───────────────────────────────────
+  useEffect(() => {
+    if (!activeScooter) {
+      setSetups([]);
+      setActiveSetupId(null);
+      return;
+    }
+    let cancelled = false;
+    tuningService
+      .listSetups(activeScooter.id)
+      .then((list) => {
+        if (cancelled) return;
+        setSetups(list);
+        setActiveSetupId(list.find((s) => s.is_active)?.id ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeScooter]);
+
+  /** Huidige Afstel-waarden als setup-parts: leesbaar én exact terug te zetten. */
+  function currentParts(): Record<string, string | number> {
+    return {
+      Blok: block?.label ?? 'Onbekend',
+      Cilinder: `${cc}cc`,
+      Carburateur: `${String(carbMm).replace('.', ',')}mm`,
+      Hoofdsproeier: `${carb.jetLow}-${carb.jetHigh}`,
+      Bougie: carb.plug ?? `hittegraad ${carb.heat}`,
+      Rollen: `${cvt.roller.toFixed(1).replace('.', ',')}g`,
+      Drukveer: cvtSpringLabel(cvt.springIndex),
+      'V-snaar': `${cvt.belt}mm`,
+      Trekveren: cvtClutchLabel(cvt.clutch),
+      Powerband: `${cvt.pbMin}-${cvt.pbMax} rpm`,
+      Vertanding: `${gearFront}/${gearRear}`,
+      // Numerieke velden: hiermee zet de Afstelhulp de schuivers exact terug.
+      blok_id: blockId,
+      cilinder_cc: cc,
+      carb_mm: carbMm,
+      rollen_g: cvt.roller,
+      drukveer_index: cvt.springIndex,
+      snaar_mm: cvt.belt,
+      trekveer_index: cvt.clutch,
+      powerband_min: cvt.pbMin,
+      powerband_max: cvt.pbMax,
+      tandwiel_voor: gearFront,
+      tandwiel_achter: gearRear,
+    };
+  }
+
+  function applySetupValues(s: TuningSetup) {
+    const p = s.parts ?? {};
+    const n = (key: string): number | null => {
+      const v = p[key];
+      const num = typeof v === 'number' ? v : Number(String(v ?? '').replace(',', '.'));
+      return Number.isFinite(num) ? num : null;
+    };
+    const blok = p.blok_id;
+    if (typeof blok === 'string' && ENGINE_BLOCKS.some((b) => b.id === blok)) setBlockId(blok);
+    const ccValue = n('cilinder_cc');
+    if (ccValue !== null) setCc(closeOption(ccValue, CC_OPTIONS));
+    const carbValue = n('carb_mm');
+    if (carbValue !== null) setCarbMm(closeOption(carbValue, CARB_MM_OPTIONS));
+    const roller = n('rollen_g');
+    const spring = n('drukveer_index');
+    const belt = n('snaar_mm');
+    const clutch = n('trekveer_index');
+    const pbMin = n('powerband_min');
+    const pbMax = n('powerband_max');
+    setCvt((prev) => ({
+      ...prev,
+      roller: roller ?? prev.roller,
+      springIndex: spring !== null ? Math.max(0, Math.min(CVT_SPRINGS.length - 1, spring)) : prev.springIndex,
+      belt: belt ?? prev.belt,
+      clutch: clutch ?? prev.clutch,
+      pbMin: pbMin ?? prev.pbMin,
+      pbMax: pbMax ?? prev.pbMax,
+    }));
+    const front = n('tandwiel_voor');
+    const rear = n('tandwiel_achter');
+    if (front !== null) setGearFront(front);
+    if (rear !== null) setGearRear(rear);
+  }
+
+  async function switchSetup(s: TuningSetup) {
+    applySetupValues(s);
+    setActiveSetupId(s.id);
+    setLogNote(`Testopstelling "${s.name}" geladen.`);
+    if (!activeScooter) return;
+    try {
+      await tuningService.activateSetup(activeScooter.id, s.id);
+      await tuningService.addChange({
+        scooterId: activeScooter.id,
+        setupId: s.id,
+        part: 'Testopstelling gewisseld',
+        newValue: s.name,
+        result: 'Geladen in Afstelhulp',
+      });
+    } catch {
+      // Wisselen in de UI mag nooit stuklopen op het activeren.
+    }
+  }
+
+  async function saveSetup(name: string) {
+    const label = name.trim();
+    if (!label) {
+      setLogNote('Geef de testopstelling eerst een naam.');
+      return;
+    }
+    if (!activeScooter) {
+      setLogNote('Voeg eerst een scooter toe om een testopstelling op te slaan.');
+      return;
+    }
+    setSetupBusy(true);
+    try {
+      const parts = currentParts();
+      const existing = setups.find((x) => x.name.toLowerCase() === label.toLowerCase());
+      let savedId: string;
+      if (existing) {
+        await tuningService.updateSetup(existing.id, { parts });
+        savedId = existing.id;
+      } else {
+        const created = await tuningService.createSetup(activeScooter.id, label, parts);
+        savedId = created.id;
+      }
+      await tuningService.activateSetup(activeScooter.id, savedId);
+      const list = await tuningService.listSetups(activeScooter.id);
+      setSetups(list);
+      setActiveSetupId(savedId);
+      setNewSetupName('');
+      setLogNote(
+        existing
+          ? `Testopstelling "${label}" bijgewerkt met de huidige waarden.`
+          : `Testopstelling "${label}" opgeslagen en actief.`,
+      );
+    } catch {
+      setLogNote('Opslaan mislukt — controleer je verbinding en of je een actieve scooter hebt.');
+    } finally {
+      setSetupBusy(false);
+    }
+  }
 
   // Opslaan in de tuninggeschiedenis (tuning_changes).
   const saveCarbAdvice = async () => {
@@ -338,6 +487,58 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
             <Text style={styles.logNote}>{logNote}</Text>
           </Card>
         ) : null}
+
+        <Card style={styles.setupCard}>
+          <View style={styles.setupHead}>
+            <Text style={styles.labelSmall}>TESTOPSTELLINGEN</Text>
+            <Text style={styles.setupCount}>{setups.length === 0 ? 'nog geen opgeslagen' : `${setups.length} opgeslagen`}</Text>
+          </View>
+          {setups.length > 0 ? (
+            <ChipRow>
+              {setups.map((s) => (
+                <Chip
+                  key={s.id}
+                  label={s.id === activeSetupId ? `${s.name} ✓` : s.name}
+                  active={s.id === activeSetupId}
+                  onPress={() => switchSetup(s)}
+                />
+              ))}
+            </ChipRow>
+          ) : (
+            <Text style={styles.hint}>
+              Sla je huidige waarden op als "Test 1", schuif verder en sla "Test 2" op. Wisselen is daarna één tik.
+            </Text>
+          )}
+          <View style={styles.setupSaveRow}>
+            <View style={{ flex: 1 }}>
+              <Input
+                value={newSetupName}
+                onChangeText={setNewSetupName}
+                placeholder="Naam, bijv. Test 1"
+                onSubmitEditing={() => saveSetup(newSetupName)}
+                returnKeyType="done"
+              />
+            </View>
+            <Button
+              label="Opslaan"
+              onPress={() => saveSetup(newSetupName)}
+              loading={setupBusy}
+              style={styles.setupSaveBtn}
+            />
+          </View>
+          <ChipRow>
+            {['Origineel', 'Dagelijks', 'Sport', 'Test 1', 'Test 2'].map((n) => (
+              <Chip key={n} label={n} onPress={() => setNewSetupName(n)} />
+            ))}
+          </ChipRow>
+          {activeSetupId ? (
+            <Text style={styles.setupActiveNote}>
+              {`Actief: ${setups.find((s) => s.id === activeSetupId)?.name ?? '—'} · GPS-metingen koppelen hieraan`}
+            </Text>
+          ) : (
+            <Text style={styles.hint}>Nog geen actieve opstelling — sla er één op om je metingen eraan te koppelen.</Text>
+          )}
+        </Card>
 
         {tab === 'carb' ? (
           <>
@@ -919,6 +1120,12 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
 }
 
 const styles = StyleSheet.create({
+  setupCard: { marginBottom: spacing.m },
+  setupHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  setupCount: { color: colors.textSubtle, fontSize: 11 },
+  setupSaveRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.s, marginTop: spacing.s },
+  setupSaveBtn: { minWidth: 96, marginTop: 0 },
+  setupActiveNote: { color: colors.success, fontSize: 11.5, marginTop: spacing.xs },
   liveCard: { marginBottom: spacing.m, backgroundColor: colors.surfaceAlt },
   liveHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginBottom: spacing.m },
   liveEyebrow: { color: colors.textSubtle, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
