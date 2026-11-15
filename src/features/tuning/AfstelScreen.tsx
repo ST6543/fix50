@@ -15,6 +15,7 @@ import { colors, fonts, radii, spacing } from '@/theme';
 import type { TuningSetup } from '@/types';
 import { shrinkForScan } from '@/lib/image-shrink';
 import { scanPlugPhoto, type PlugScanResult } from '@/services/plug-scan';
+import { calculateJetSimulation, idleJetTarget, type Mixture } from '@/lib/jet-simulator';
 import {
   calculateCarb,
   calculateCvt,
@@ -190,6 +191,32 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
     [cc, carbMm, material, setupType, cooling, block],
   );
   const blockPlug = block?.plugCode ? block.plugCode.replace('x', String(carb.heat)) : null;
+
+  // ── Sproeier-simulator: wat zit er nu in, en wat doet dat per gasstand? ──
+  const [mainJet, setMainJet] = useState<number>(() => carb.jetHigh);
+  const [idleJet, setIdleJet] = useState<number>(() => idleJetTarget(carb.jetHigh));
+  const [needleClip, setNeedleClip] = useState<number>(() => carb.clip);
+  const [airScrew, setAirScrew] = useState<number>(1.5);
+
+  const jetSim = useMemo(
+    () =>
+      calculateJetSimulation({
+        start: carb,
+        mainJet,
+        idleJet,
+        clip: needleClip,
+        airScrew: Math.round(airScrew * 4) / 4,
+      }),
+    [carb, mainJet, idleJet, needleClip, airScrew],
+  );
+
+  const mixtureTone: Record<Mixture, 'success' | 'warning' | 'danger'> = {
+    goed: 'success',
+    'iets arm': 'warning',
+    'iets rijk': 'warning',
+    arm: 'danger',
+    rijk: 'danger',
+  };
   const diag = CARB_DIAGNOSES.find((d) => d.id === diagId) ?? null;
 
   // ── CVT-state (pre-filled waar mogelijk) ──
@@ -660,7 +687,85 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
               <Button label="Startafstelling opslaan in tuninggeschiedenis" variant="secondary" onPress={saveCarbAdvice} />
             </Card>
 
-            <NumberedHeader n="3" title="AFSTELKAART PER GASSTAND" subtitle="Zie direct welk onderdeel bij welke gasstand de meeste invloed heeft." />
+            <NumberedHeader
+              n="3"
+              title="JOUW AFSTELLING, LIVE"
+              subtitle="Vul in wat er nu in de carburateur zit en zie per gasstand waar je staat."
+            />
+            <Card>
+              <Slider
+                label="Hoofdsproeier"
+                value={mainJet}
+                min={55}
+                max={140}
+                step={1}
+                target={Math.round((carb.jetLow + carb.jetHigh) / 2)}
+                hint={`Startadvies ${carb.jetLow}–${carb.jetHigh}; het streepje is het midden daarvan.`}
+                onChange={setMainJet}
+              />
+              <Slider
+                label="Stationairsproeier"
+                value={idleJet}
+                min={28}
+                max={65}
+                step={1}
+                target={idleJetTarget(mainJet)}
+                hint="Vuistregel: ongeveer 40% van de hoofdsproeier bij deze kleine carburateurs."
+                onChange={setIdleJet}
+              />
+              <Text style={styles.label}>Naaldclip (1 = hoogste stand, armst)</Text>
+              <ChipRow>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Chip key={n} label={`clip ${n}`} active={needleClip === n} onPress={() => setNeedleClip(n)} />
+                ))}
+              </ChipRow>
+              <Slider
+                label="Luchtschroef"
+                value={airScrew}
+                min={0.5}
+                max={3}
+                step={0.25}
+                decimals={2}
+                unit="slag"
+                hint="Verder uit = meer lucht = armer. 1,5 slag is het neutrale uitgangspunt."
+                onChange={setAirScrew}
+              />
+              <Button
+                label="Startadvies overnemen"
+                variant="secondary"
+                onPress={() => {
+                  setMainJet(carb.jetHigh);
+                  setIdleJet(idleJetTarget(carb.jetHigh));
+                  setNeedleClip(carb.clip);
+                  setAirScrew(1.5);
+                }}
+              />
+              <View style={styles.divider} />
+              <View style={styles.verdictRow}>
+                <Badge
+                  label={`mengsel: ${jetSim.overall}`}
+                  tone={jetSim.overall === 'goed' ? 'success' : jetSim.overall === 'gemengd' ? 'warning' : 'danger'}
+                />
+                <Text style={styles.verdictSpeed}>richtlijn, geen meting</Text>
+              </View>
+              <Text style={styles.hint}>{jetSim.summary}</Text>
+              {jetSim.circuits.map((c) => (
+                <View key={c.id} style={styles.circuitCard}>
+                  <View style={styles.circuitHead}>
+                    <Text style={styles.circuitLabel}>{c.label}</Text>
+                    <Badge label={c.mixture} tone={mixtureTone[c.mixture]} />
+                  </View>
+                  <Text style={styles.circuitComponent}>{c.component}</Text>
+                  {c.risk ? <Text style={styles.blockInfoPit}>{c.risk}</Text> : null}
+                  <Text style={styles.nextStepText}>{c.nextTest}</Text>
+                </View>
+              ))}
+              {jetSim.warnings.map((w) => (
+                <Text key={w} style={styles.blockInfoPit}>{`⚠ ${w}`}</Text>
+              ))}
+            </Card>
+
+            <NumberedHeader n="4" title="AFSTELKAART PER GASSTAND" subtitle="Zie direct welk onderdeel bij welke gasstand de meeste invloed heeft." />
             <Card>
               {THROTTLE_MAP.map((r, i) => (
                 <View key={r.range} style={i > 0 ? styles.divider : undefined}>
@@ -670,7 +775,7 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
               ))}
             </Card>
 
-            <NumberedHeader n="4" title="BOUGIE LEZEN" subtitle="Na een volgas-test, het liefst met een nieuwe bougie." />
+            <NumberedHeader n="5" title="BOUGIE LEZEN" subtitle="Na een volgas-test, het liefst met een nieuwe bougie." />
             <Card>
               <View style={styles.plugRow}>
                 {PLUG_READING.map((p) => (
@@ -734,7 +839,7 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
               ) : null}
             </Card>
 
-            <NumberedHeader n="5" title="MENGSEL & DIAGNOSE" subtitle="Kies een symptoom voor gericht advies." />
+            <NumberedHeader n="6" title="MENGSEL & DIAGNOSE" subtitle="Kies een symptoom voor gericht advies." />
             <Card>
               <View style={{ gap: spacing.s }}>
                 {CARB_DIAGNOSES.map((d) => (
@@ -1213,6 +1318,17 @@ const styles = StyleSheet.create({
   disclaimerCard: { marginTop: spacing.l },
   disclaimer: { color: colors.textSubtle, fontSize: 12, lineHeight: 18 },
   disclaimerBrand: { color: colors.textSubtle, fontSize: 12, marginTop: spacing.s, fontStyle: 'italic' },
+  circuitCard: {
+    marginTop: spacing.s,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.s,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    padding: spacing.s,
+  },
+  circuitHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.s },
+  circuitLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  circuitComponent: { color: colors.textSubtle, fontSize: 11.5, marginTop: 1 },
   planRow: { flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' },
   planRowSpaced: { flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start', marginTop: spacing.m },
   planDot: {
