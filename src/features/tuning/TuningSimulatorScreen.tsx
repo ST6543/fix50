@@ -19,7 +19,7 @@ import {
   type CvtState,
 } from '@/lib/afstel';
 import { calibrateModel } from '@/lib/model-calibration';
-import { predictionConfidence, summarizeScenario, type ConfidenceLevel } from '@/lib/simulator';
+import { predictionConfidence, scenarioConfidence, summarizeScenario, type ConfidenceLevel } from '@/lib/simulator';
 import { colors, fonts, spacing } from '@/theme';
 import type { TuningSetup } from '@/types';
 
@@ -50,6 +50,8 @@ export default function TuningSimulatorScreen() {
   const { activeScooter, setup } = useScooters();
   const [scenarios, setScenarios] = useState<Scenario[]>(() => makeScenarios(DEFAULT_CVT_STATE));
   const [selected, setSelected] = useState<ScenarioKey>('A');
+  /** De opstelling waarop de ijking rust; scenario's die hiervan afwijken zijn extrapolaties. */
+  const [baseline, setBaseline] = useState<CvtState>(DEFAULT_CVT_STATE);
   const [setups, setSetups] = useState<TuningSetup[]>([]);
   const [calibration, setCalibration] = useState({ samples: 0, meanAbsErrorPct: null as number | null });
   const [saveName, setSaveName] = useState('');
@@ -66,7 +68,11 @@ export default function TuningSimulatorScreen() {
         .then(([setupList, runs]) => {
           setSetups(setupList);
           const active = setupList.find((s) => s.is_active) ?? setupList[0] ?? null;
-          if (active) setScenarios(makeScenarios(cvtStateFromSetupParts(active.parts, DEFAULT_CVT_STATE)));
+          if (active) {
+            const baseCvt = cvtStateFromSetupParts(active.parts, DEFAULT_CVT_STATE);
+            setBaseline(baseCvt);
+            setScenarios(makeScenarios(baseCvt));
+          }
 
           const usable = runs.filter((r) => r.setup_id && r.max_speed_kmh !== null && r.gps_quality !== 'slecht');
           const pairs = usable.flatMap((r) => {
@@ -95,9 +101,11 @@ export default function TuningSimulatorScreen() {
     () =>
       scenarios.map((s) => {
         const model = calculateCvt(s.cvt);
-        return { ...s, model, summary: summarizeScenario(model, confidence), confidence };
+        // Betrouwbaarheid per voorspelling: dichter bij de geijkte basis = zekerder.
+        const conf = scenarioConfidence(confidence, s.cvt, baseline);
+        return { ...s, model, summary: summarizeScenario(model, conf), confidence: conf };
       }),
-    [scenarios, confidence],
+    [scenarios, confidence, baseline],
   );
 
   const active = evaluated.find((s) => s.key === selected) ?? evaluated[0]!;
@@ -165,8 +173,8 @@ export default function TuningSimulatorScreen() {
     .filter((d) => d.rpm !== null)
     .map((d) => ({
       x: d.speed,
-      yLow: (d.rpm as number) * (1 - confidence.spreadPct / 100),
-      yHigh: (d.rpm as number) * (1 + confidence.spreadPct / 100),
+      yLow: (d.rpm as number) * (1 - active.confidence.spreadPct / 100),
+      yHigh: (d.rpm as number) * (1 + active.confidence.spreadPct / 100),
     }));
 
   return (
@@ -180,8 +188,8 @@ export default function TuningSimulatorScreen() {
             gekozen scenario.
           </Text>
           <View style={styles.badgeRow}>
-            <Badge label={`model: ${confidence.level}`} tone={TONE[confidence.level]} />
-            <Badge label={`band ±${confidence.spreadPct}%`} tone="neutral" />
+            <Badge label={`basiszekerheid: ${confidence.level}`} tone={TONE[confidence.level]} />
+            <Badge label={`band actief ±${active.confidence.spreadPct}%`} tone="neutral" />
             {calibration.samples > 0 ? <Badge label={`${calibration.samples} ijkingen`} tone="info" /> : null}
           </View>
         </Card>
@@ -201,6 +209,9 @@ export default function TuningSimulatorScreen() {
                 </Text>
                 <Text style={styles.scenarioMeta}>
                   {`${s.summary.topSpeed} km/u (${s.summary.topLow}–${s.summary.topHigh}) · 0–50 gevoel ${s.summary.launchScore}/10`}
+                </Text>
+                <Text style={styles.scenarioConf}>
+                  {`zekerheid ${s.confidence.level} · band ±${s.confidence.spreadPct}%`}
                 </Text>
               </View>
               <Chip label={s.enabled ? 'in grafiek' : 'verborgen'} active={s.enabled} onPress={() => toggle(s.key)} />
@@ -304,6 +315,11 @@ export default function TuningSimulatorScreen() {
             <Text style={[styles.compareVal, styles.compareHeadText]}>shift</Text>
           </View>
           <Text style={styles.hint}>{active.summary.verdict}</Text>
+          <Text style={styles.confidenceLine}>
+            {evaluated
+              .map((s) => `${s.key} ${s.confidence.level} (±${s.confidence.spreadPct}%)`)
+              .join(' · ')}
+          </Text>
         </Card>
 
         <Card>
@@ -322,9 +338,9 @@ export default function TuningSimulatorScreen() {
         </Card>
 
         <Card>
-          <Text style={styles.sectionLabel}>BETROUWBAARHEID</Text>
-          <Text style={styles.hint}>{confidence.label}</Text>
-          {confidence.reasons.map((r) => (
+          <Text style={styles.sectionLabel}>BETROUWBAARHEID — SCENARIO {active.key}</Text>
+          <Text style={styles.hint}>{active.confidence.label}</Text>
+          {active.confidence.reasons.map((r) => (
             <Text key={r} style={styles.reason}>
               {'• ' + r}
             </Text>
@@ -353,6 +369,8 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 5 },
   scenarioName: { color: colors.text, fontSize: 14.5, fontWeight: '700' },
   scenarioMeta: { color: colors.textMuted, fontSize: 11.5, marginTop: 1 },
+  scenarioConf: { color: colors.textSubtle, fontSize: 11, marginTop: 1 },
+  confidenceLine: { color: colors.textMuted, fontSize: 11.5, marginTop: spacing.s },
   divider: { height: 1, backgroundColor: colors.borderSoft, marginVertical: spacing.m },
   compareHead: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
   compareHeadText: { color: colors.textSubtle, fontSize: 10.5, textTransform: 'uppercase' },

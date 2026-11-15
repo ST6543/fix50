@@ -1,6 +1,6 @@
 /** Tests voor de simulator: betrouwbaarheid, bandbreedte en samenvatting. */
 import { calculateCvt, DEFAULT_CVT_STATE } from '@/lib/afstel';
-import { predictionConfidence, summarizeScenario } from '@/lib/simulator';
+import { predictionConfidence, scenarioConfidence, summarizeScenario, type ConfidenceResult } from '@/lib/simulator';
 
 describe('predictionConfidence', () => {
   it('geeft laag zonder voertuiggegevens en metingen', () => {
@@ -32,6 +32,44 @@ describe('predictionConfidence', () => {
     });
     expect(c.level).toBe('hoog');
     expect(c.spreadPct).toBe(14);
+  });
+});
+
+describe('scenarioConfidence', () => {
+  const base: ConfidenceResult = predictionConfidence({ hasBlock: true, hasCylinder: true, calibrationSamples: 5 });
+  const baseline = { roller: 8.5, springIndex: 2, belt: 765, pbMin: 7600, pbMax: 9000 };
+
+  it('houdt de basiszekerheid bij een scenario dat gelijk is aan de geijkte opstelling', () => {
+    const conf = scenarioConfidence(base, { ...baseline }, baseline);
+    expect(conf.level).toBe(base.level);
+    expect(conf.spreadPct).toBe(base.spreadPct);
+    expect(conf.reasons).toHaveLength(0);
+    expect(conf.label).toContain('geijkte opstelling');
+  });
+
+  it('verlaagt de zekerheid als het rolgewicht ver van de basis ligt', () => {
+    const mild = scenarioConfidence(base, { ...baseline, roller: 6.5 }, baseline);
+    const extreme = scenarioConfidence(base, { ...baseline, roller: 4 }, baseline);
+    expect(mild.level).toBe('gemiddeld');
+    expect(extreme.level).toBe('laag');
+    expect(extreme.spreadPct).toBeGreaterThan(mild.spreadPct);
+    expect(extreme.reasons.join(' ')).toContain('Rolgewicht');
+  });
+
+  it('telt een andere snaar, drukveer en powerband mee', () => {
+    const conf = scenarioConfidence(
+      base,
+      { roller: 8.5, springIndex: 4, belt: 800, pbMin: 9000, pbMax: 10400 },
+      baseline,
+    );
+    expect(conf.level).toBe('laag');
+    expect(conf.reasons.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('maakt de band nooit smaller dan de basisband', () => {
+    const strict = predictionConfidence({ hasBlock: true, hasCylinder: true, calibrationSamples: 6, meanAbsErrorPct: 12 });
+    const conf = scenarioConfidence(strict, { ...baseline, roller: 12 }, baseline);
+    expect(conf.spreadPct).toBeGreaterThanOrEqual(strict.spreadPct);
   });
 });
 

@@ -4,6 +4,9 @@
  */
 import type { CvtModel, CvtState } from './afstel';
 
+/** Sleutels van CvtState die de betrouwbaarheid per scenario bepalen. */
+export const SCENARIO_VALUE_KEYS = ['roller', 'springIndex', 'belt', 'pbMin', 'pbMax'] as const;
+
 export type ConfidenceLevel = 'hoog' | 'gemiddeld' | 'laag';
 
 export interface ConfidenceInput {
@@ -61,6 +64,67 @@ export function predictionConfidence(input: ConfidenceInput): ConfidenceResult {
         : 'Laag: veel aannames. Zie dit als startpunt en meet het na met een GPS-test.';
 
   return { level, spreadPct, reasons, label };
+}
+
+/** De CVT-waarden waarop de voorspelling feitelijk berust. */
+export interface ScenarioValues {
+  roller: number;
+  springIndex: number;
+  belt: number;
+  pbMin: number;
+  pbMax: number;
+}
+
+/**
+ * Betrouwbaarheid per scenario: de basiszekerheid van het model, verlaagd
+ * naarmate het scenario verder van de geijkte basis af staat (extrapolatie).
+ */
+export function scenarioConfidence(
+  base: ConfidenceResult,
+  scenario: ScenarioValues,
+  baseline: ScenarioValues,
+): ConfidenceResult {
+  const reasons: string[] = [];
+  let penalty = 0;
+
+  const rollerDelta = Math.abs(scenario.roller - baseline.roller);
+  if (rollerDelta > 3) {
+    penalty += 2;
+    reasons.push(`Rolgewicht wijkt ${rollerDelta.toFixed(1)} g af van je geijkte opstelling.`);
+  } else if (rollerDelta > 1.5) {
+    penalty += 1;
+    reasons.push(`Rolgewicht wijkt ${rollerDelta.toFixed(1)} g af — buiten het geijkte bereik.`);
+  }
+
+  const springDelta = Math.abs(scenario.springIndex - baseline.springIndex);
+  if (springDelta >= 2) {
+    penalty += 1;
+    reasons.push('Drukveer staat twee of meer stappen van de geijkte opstelling.');
+  }
+
+  const beltDelta = Math.abs(scenario.belt - baseline.belt);
+  if (beltDelta > 20) {
+    penalty += 1;
+    reasons.push(`V-snaar wijkt ${Math.round(beltDelta)} mm af van wat gemeten is.`);
+  }
+
+  const center = (v: ScenarioValues) => (v.pbMin + v.pbMax) / 2;
+  if (Math.abs(center(scenario) - center(baseline)) > 1200) {
+    penalty += 1;
+    reasons.push('Powerband ligt meer dan 1200 rpm naast je geijkte opstelling.');
+  }
+
+  const levels: ConfidenceLevel[] = ['laag', 'gemiddeld', 'hoog'];
+  const baseIndex = levels.indexOf(base.level);
+  const level = levels[Math.max(0, baseIndex - Math.min(2, penalty))]!;
+  const spreadPct = Math.max(base.spreadPct, SPREAD[level]);
+
+  const label =
+    penalty === 0
+      ? `Zelfde uitgangspunt als je geijkte opstelling — ${base.label.charAt(0).toLowerCase()}${base.label.slice(1)}`
+      : `${level === 'laag' ? 'Zwakke' : 'Beperkte'} basis: dit scenario is een extrapolatie van wat er gemeten is.`;
+
+  return { level, spreadPct, reasons: [...reasons, ...base.reasons].slice(0, 4), label };
 }
 
 export interface ScenarioSummary {
