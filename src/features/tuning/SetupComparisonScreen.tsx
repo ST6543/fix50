@@ -8,10 +8,12 @@ import type { AppNav } from '@/navigation/types';
 import { Badge, Card, EmptyState, Loading, SectionTitle } from '@/components/ui';
 import { ScaleIcon } from '@/components/icons';
 import { calculateCvt, cvtSpeedLabel, cvtStateFromSetupParts, SETUP_NUMERIC_KEYS } from '@/lib/afstel';
+import { applyCalibration, calibrateModel } from '@/lib/model-calibration';
+import * as perfService from '@/services/performance';
 import { useScooters } from '@/hooks/useScooters';
 import * as tuningService from '@/services/tuning';
 import { colors, fonts, spacing } from '@/theme';
-import type { TuningSetup } from '@/types';
+import type { PerformanceRun, TuningSetup } from '@/types';
 
 type Nav = AppNav;
 
@@ -19,6 +21,7 @@ export default function SetupComparisonScreen() {
   const navigation = useNavigation<Nav>();
   const { activeScooter } = useScooters();
   const [setups, setSetups] = useState<TuningSetup[]>([]);
+  const [runs, setRuns] = useState<PerformanceRun[]>([]);
   const [aId, setAId] = useState<string | null>(null);
   const [bId, setBId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,14 +32,16 @@ export default function SetupComparisonScreen() {
         setLoading(false);
         return;
       }
-      tuningService
-        .listSetups(activeScooter.id)
-        .then((s) => {
+      Promise.all([
+        tuningService.listSetups(activeScooter.id).catch(() => [] as TuningSetup[]),
+        perfService.listRuns(100, activeScooter.id).catch(() => [] as PerformanceRun[]),
+      ])
+        .then(([s, r]) => {
           setSetups(s);
+          setRuns(r);
           setAId(s[0]?.id ?? null);
           setBId(s[1]?.id ?? null);
         })
-        .catch(() => setSetups([]))
         .finally(() => setLoading(false));
     }, [activeScooter]),
   );
@@ -69,6 +74,21 @@ export default function SetupComparisonScreen() {
   // Voorspelde score per opstelling, uit dezelfde rekenregels als de Afstelhulp.
   const predA = a ? calculateCvt(cvtStateFromSetupParts(a.parts)) : null;
   const predB = b ? calculateCvt(cvtStateFromSetupParts(b.parts)) : null;
+  // ── Modelijking: voorspelling vs. echte GPS-metingen ──────────
+  const usableRuns = runs.filter((r) => r.setup_id && r.max_speed_kmh !== null && r.gps_quality !== 'slecht');
+  const pairs = usableRuns.flatMap((r) => {
+    const s = setups.find((x) => x.id === r.setup_id);
+    if (!s || r.max_speed_kmh === null) return [];
+    return [{ predicted: calculateCvt(cvtStateFromSetupParts(s.parts)).topSpeed, measured: r.max_speed_kmh }];
+  });
+  const accuracy = calibrateModel(pairs);
+
+  const measuredFor = (setupId: string | null) => {
+    const list = usableRuns.filter((r) => r.setup_id === setupId).map((r) => r.max_speed_kmh as number);
+    if (list.length === 0) return null;
+    return { avg: list.reduce((x, y) => x + y, 0) / list.length, count: list.length };
+  };
+
   const winner =
     a && b && predA && predB
       ? predA.balanceScore > predB.balanceScore ||
@@ -179,6 +199,59 @@ export default function SetupComparisonScreen() {
           </Card>
         ) : null}
 
+        {a && b && predA && predB ? (
+          <Card style={styles.predCard}>
+            <Text style={styles.predTitle}>MODEL IJKING</Text>
+            <Text style={styles.predSub}>Voorspelling vergeleken met je eigen GPS-testritten.</Text>
+            {accuracy.samples === 0 ? (
+              <Text style={styles.hint}>
+                Nog geen testrit gekoppeld aan een opstelling. Rijd een GPS-test met een opgeslagen setup — daarna rekent
+                Fix50 hier uit hoeveel het model ernaast zit.
+              </Text>
+            ) : (
+              <>
+                <View style={styles.calibRow}>
+                  <Badge
+                    label={`${accuracy.samples} meting${accuracy.samples === 1 ? '' : 'en'}`}
+                    tone={accuracy.confidence === 'hoog' ? 'success' : accuracy.confidence === 'gemiddeld' ? 'warning' : 'neutral'}
+                  />
+                  <Badge label={`model voorspelt ${accuracy.bias}`} tone="info" />
+                  <Badge label={`±${accuracy.meanAbsErrorPct}%`} tone="neutral" />
+                </View>
+                <Text style={styles.hint}>{accuracy.label}</Text>
+                <View style={styles.divider} />
+                {[
+                  { setup: a, pred: predA },
+                  { setup: b, pred: predB },
+                ].map(({ setup, pred }) => {
+                  const cal = applyCalibration(pred.topSpeed, accuracy);
+                  const meas = measuredFor(setup.id);
+                  return (
+                    <View key={setup.id} style={styles.calibSetupRow}>
+                      <Text style={styles.calibSetupName} numberOfLines={1}>
+                        {setup.name}
+                      </Text>
+                      <Text style={styles.calibLine}>
+                        {`voorspeld ${Math.round(pred.topSpeed)} km/u`}
+                        {cal.calibrated ? ` · bijgesteld ${cal.low}–${cal.high}` : ''}
+                      </Text>
+                      <Text style={[styles.calibLine, meas ? styles.calibMeasured : null]}>
+                        {meas
+                          ? `gemeten ${meas.avg.toFixed(1)} km/u gemiddeld (${meas.count} run${meas.count === 1 ? '' : 's'})`
+                          : 'nog geen eigen meting'}
+                      </Text>
+                    </View>
+                  );
+                })}
+                <Text style={styles.predNote}>
+                  De bijstelling is een correctie op een schatting, geen meting. Meer runs = smallere band; onder de 3 runs
+                  blijft het een grove indicatie.
+                </Text>
+              </>
+            )}
+          </Card>
+        ) : null}
+
         <SectionTitle>{differences.length} verschillen</SectionTitle>
         {a && b ? (
           <>
@@ -238,4 +311,9 @@ const styles = StyleSheet.create({
   predVerdictRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginTop: spacing.s },
   predWinner: { color: colors.text, fontSize: 15, fontWeight: '800', fontFamily: fonts.display, flexShrink: 1 },
   predNote: { color: colors.textSubtle, fontSize: 11, marginTop: spacing.s, lineHeight: 16 },
+  calibRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.m },
+  calibSetupRow: { marginTop: spacing.m },
+  calibSetupName: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  calibLine: { color: colors.textMuted, fontSize: 12.5, marginTop: 2 },
+  calibMeasured: { color: colors.success, fontWeight: '600' },
 });
