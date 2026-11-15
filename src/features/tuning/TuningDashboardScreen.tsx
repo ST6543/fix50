@@ -209,13 +209,20 @@ export default function TuningDashboardScreen() {
             onPress={() => navigation.navigate('PerformanceHistory')}
           />
         </View>
-        <PressableTile
-          icon={<ClipboardIcon size={18} color={colors.primary} />}
-          title="Wijzigingslog"
-          sub="Elke aanpassing met resultaat"
-          onPress={() => navigation.navigate('TuningHistory')}
-          style={styles.wideTile}
-        />
+        <View style={styles.tilesRow}>
+          <PressableTile
+            icon={<SlidersIcon size={18} color={colors.primary} />}
+            title="Simulator"
+            sub="Scenario's A/B/C"
+            onPress={() => navigation.navigate('TuningSimulator')}
+          />
+          <PressableTile
+            icon={<ClipboardIcon size={18} color={colors.primary} />}
+            title="Wijzigingslog"
+            sub="Elke aanpassing"
+            onPress={() => navigation.navigate('TuningHistory')}
+          />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -240,5 +247,4 @@ const styles = StyleSheet.create({
   setupStats: { flexDirection: 'row', gap: spacing.m, marginTop: spacing.s, flexWrap: 'wrap' },
   setupStat: { color: colors.textMuted, fontSize: 12.5 },
   tilesRow: { flexDirection: 'row', gap: spacing.s, marginBottom: spacing.s },
-  wideTile: { marginBottom: spacing.s },
 });

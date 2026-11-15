@@ -61,12 +61,21 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
     <SafeAreaView style={styles.safe} edges={embedded ? [] : ['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Button label="Afstelhulp openen" onPress={() => navigation.navigate('Afstel')} style={{ marginBottom: spacing.s }} />
-        <Button
-          label="Tuning-dashboard"
-          variant="secondary"
-          onPress={() => navigation.navigate('TuningDashboard')}
-          style={{ marginBottom: spacing.m }}
-        />
+        <View style={styles.navRow}>
+          <Button
+            label="Dashboard"
+            variant="secondary"
+            onPress={() => navigation.navigate('TuningDashboard')}
+            style={styles.navBtn}
+          />
+          <Button
+            label="Simulator"
+            variant="secondary"
+            onPress={() => navigation.navigate('TuningSimulator')}
+            style={styles.navBtn}
+          />
+        </View>
+        <View style={{ height: spacing.m }} />
         <SectionTitle>Huidige setup</SectionTitle>
         <Card>
           {setup ? (
@@ -156,6 +165,8 @@ const styles = StyleSheet.create({
   setupName: { color: colors.text, fontWeight: '700', fontSize: 16 },
   setupActions: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.m },
   setupBtn: { flex: 1, minHeight: 40 },
+  navRow: { flexDirection: 'row', gap: spacing.s },
+  navBtn: { flex: 1 },
   actionsRow: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.s, marginBottom: spacing.s },
   actionBtn: { flex: 1 },
 });

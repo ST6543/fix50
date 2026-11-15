@@ -5,7 +5,7 @@
  */
 import React, { useMemo, useRef } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Line, Path, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Line, Path, Polygon, Polyline, Rect, Stop } from 'react-native-svg';
 
 import { FadeInView, GrowInView } from '@/components/motion';
 import { colors, spacing } from '@/theme';
@@ -181,6 +181,110 @@ export function SpeedChart({
   );
 }
 
+// ── MultiLineChart ───────────────────────────────────────────
+/**
+ * Meerdere voorspellingslijnen in één grafiek, met optionele onzekerheidsband.
+ * Voorspellingen horen gestreept te zijn; echte metingen doorgetrokken.
+ */
+export function MultiLineChart({
+  series,
+  band,
+  height = 180,
+  xMax = 110,
+  yMax = 12000,
+  xUnit = 'km/u',
+  yUnit = 'rpm',
+}: {
+  series: { label: string; color: string; dashed?: boolean; points: { x: number; y: number }[] }[];
+  band?: { points: { x: number; yLow: number; yHigh: number }[]; color: string };
+  height?: number;
+  xMax?: number;
+  yMax?: number;
+  xUnit?: string;
+  yUnit?: string;
+}) {
+  const W = 340;
+  const PAD = { top: 12, bottom: 20, left: 30, right: 10 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = height - PAD.top - PAD.bottom;
+  const px = (x: number) => PAD.left + (Math.min(Math.max(x, 0), xMax) / xMax) * innerW;
+  const py = (y: number) => PAD.top + (1 - Math.min(Math.max(y, 0), yMax) / yMax) * innerH;
+
+  const bandPoints = band
+    ? [
+        ...band.points.map((p) => `${px(p.x).toFixed(1)},${py(p.yHigh).toFixed(1)}`),
+        ...[...band.points].reverse().map((p) => `${px(p.x).toFixed(1)},${py(p.yLow).toFixed(1)}`),
+      ].join(' ')
+    : '';
+
+  return (
+    <View style={{ alignSelf: 'stretch' }}>
+      <Svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height}>
+        {[0.25, 0.5, 0.75].map((f) => (
+          <Line
+            key={f}
+            x1={PAD.left}
+            x2={W - PAD.right}
+            y1={PAD.top + (1 - f) * innerH}
+            y2={PAD.top + (1 - f) * innerH}
+            stroke={colors.border}
+            strokeWidth={1}
+            strokeDasharray="3 6"
+          />
+        ))}
+        <Line x1={PAD.left} x2={W - PAD.right} y1={height - PAD.bottom} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} />
+        <Line x1={PAD.left} x2={PAD.left} y1={PAD.top} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} />
+
+        {band && bandPoints ? <Polygon points={bandPoints} fill={band.color} opacity={0.16} /> : null}
+
+        {series.map((s) => (
+          <Polyline
+            key={s.label}
+            points={s.points.map((p) => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ')}
+            fill="none"
+            stroke={s.color}
+            strokeWidth={2.4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray={s.dashed ? '6 5' : undefined}
+          />
+        ))}
+      </Svg>
+      <View style={styles.axisRow}>
+        <Text style={styles.axisLabel}>0 {xUnit}</Text>
+        <Text style={styles.axisLabel}>
+          {xMax} {xUnit}
+        </Text>
+        <Text style={styles.axisLabel}>
+          {yMax.toLocaleString('nl-NL')} {yUnit}
+        </Text>
+      </View>
+      <View style={styles.legendRow}>
+        {series.map((s) => (
+          <View key={s.label} style={styles.legendItem}>
+            <View
+              style={[
+                styles.legendSwatch,
+                { backgroundColor: s.color },
+                s.dashed ? styles.legendDashed : null,
+              ]}
+            />
+            <Text style={styles.legendText} numberOfLines={1}>
+              {s.label}
+            </Text>
+          </View>
+        ))}
+        {band ? (
+          <View style={styles.legendItem}>
+            <Rect width={14} height={8} fill={band.color} opacity={0.3} rx={2} />
+            <Text style={styles.legendText}>onzekerheid</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   chartRow: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.s },
   barCol: { flex: 1, alignItems: 'center', gap: spacing.s },
@@ -191,4 +295,9 @@ const styles = StyleSheet.create({
   chartWrap: { alignSelf: 'stretch' },
   axisRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs },
   axisLabel: { color: colors.textMuted, fontSize: 12.5 },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s, marginTop: spacing.s },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendSwatch: { width: 14, height: 3, borderRadius: 2 },
+  legendDashed: { opacity: 0.75 },
+  legendText: { color: colors.textMuted, fontSize: 11.5 },
 });

@@ -18,6 +18,7 @@ export type RootStackParamList = {
   SetupDetail: { setupId?: string } | undefined;
   Afstel: undefined;
   TuningDashboard: undefined;
+  TuningSimulator: undefined;
   TuningHistory: undefined;
   SetupComparison: undefined;
   PerformanceRun: undefined;
