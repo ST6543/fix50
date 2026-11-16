@@ -12,10 +12,12 @@ import * as ImagePicker from 'expo-image-picker';
 import * as tuningService from '@/services/tuning';
 import { ENGINE_BLOCKS, findBlockFromText } from '@/data/engineBlocks';
 import { colors, fonts, radii, spacing } from '@/theme';
-import type { TuningSetup } from '@/types';
+import type { TuningChange, TuningSetup } from '@/types';
 import { shrinkForScan } from '@/lib/image-shrink';
 import { scanPlugPhoto, type PlugScanResult } from '@/services/plug-scan';
 import { calculateJetSimulation, idleJetTarget, type Mixture } from '@/lib/jet-simulator';
+import { buildJetChangeRows, describeJetDiff, isJetChangePart, type JetConfig } from '@/lib/jet-log';
+import { formatDateTime } from '@/lib/format';
 import {
   calculateCarb,
   calculateCvt,
@@ -198,6 +200,19 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const [needleClip, setNeedleClip] = useState<number>(() => carb.clip);
   const [airScrew, setAirScrew] = useState<number>(1.5);
 
+  // ── Sproeierlog: elke wissel met het bijbehorende mengsel- en testresultaat ──
+  // De basislijn is de laatst opgeslagen stand (of het startadvies).
+  const [jetBaseline, setJetBaseline] = useState<JetConfig>(() => ({
+    mainJet: carb.jetHigh,
+    idleJet: idleJetTarget(carb.jetHigh),
+    clip: carb.clip,
+    airScrew: 1.5,
+  }));
+  const [jetTestNote, setJetTestNote] = useState('');
+  const [jetLog, setJetLog] = useState<TuningChange[]>([]);
+  const [jetLogBusy, setJetLogBusy] = useState(false);
+  const jetConfig: JetConfig = { mainJet, idleJet, clip: needleClip, airScrew };
+
   const jetSim = useMemo(
     () =>
       calculateJetSimulation({
@@ -290,6 +305,24 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
     [gearFront, gearRear, gearPreset],
   );
   const isShakeBlock = block?.transmission === 'schakel';
+
+  // ── Sproeierlog laden (alleen regels uit de simulator) ───────
+  useEffect(() => {
+    if (!activeScooter) {
+      setJetLog([]);
+      return;
+    }
+    let cancelled = false;
+    tuningService
+      .listChanges(activeScooter.id)
+      .then((rows) => {
+        if (!cancelled) setJetLog(rows.filter((r) => isJetChangePart(r.part)).slice(0, 6));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeScooter]);
 
   // ── Testopstellingen laden ───────────────────────────────────
   useEffect(() => {
@@ -447,6 +480,47 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
       setLogNote('Startafstelling opgeslagen in de tuninggeschiedenis.');
     } catch {
       setLogNote('Opslaan mislukt — controleer of je een actieve scooter hebt.');
+    }
+  };
+
+  /**
+   * Logt elke gewijzigde sproeier/clip/luchtschroef met het mengselresultaat
+   * per gasstand en het testresultaat dat de gebruiker invulde.
+   */
+  const saveJetChange = async () => {
+    const rows = buildJetChangeRows({ prev: jetBaseline, next: jetConfig, sim: jetSim, testNote: jetTestNote });
+    if (rows.length === 0) {
+      setLogNote('Geen sproeierwijziging om te loggen — pas eerst een sproeier, clip of luchtschroef aan.');
+      return;
+    }
+    if (!activeScooter) {
+      setLogNote('Voeg eerst een scooter toe om een sproeierwissel te loggen.');
+      return;
+    }
+    setJetLogBusy(true);
+    try {
+      for (const row of rows) {
+        await tuningService.addChange({
+          scooterId: activeScooter.id,
+          setupId: activeSetupId,
+          part: row.part,
+          oldValue: row.oldValue,
+          newValue: row.newValue,
+          result: row.result,
+          notes: row.notes,
+        });
+      }
+      setJetBaseline(jetConfig);
+      setJetTestNote('');
+      const list = await tuningService.listChanges(activeScooter.id);
+      setJetLog(list.filter((r) => isJetChangePart(r.part)).slice(0, 6));
+      setLogNote(
+        `${rows.length} sproeierwijziging${rows.length === 1 ? '' : 'en'} met mengselresultaat opgeslagen in de tuninggeschiedenis.`,
+      );
+    } catch {
+      setLogNote('Opslaan van de sproeierwissel mislukt — controleer je verbinding.');
+    } finally {
+      setJetLogBusy(false);
     }
   };
 
@@ -763,6 +837,57 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
               {jetSim.warnings.map((w) => (
                 <Text key={w} style={styles.blockInfoPit}>{`⚠ ${w}`}</Text>
               ))}
+
+              <View style={styles.divider} />
+              <Text style={styles.labelSmall}>SPROEIERLOGGEN</Text>
+              <Text style={styles.hint}>{describeJetDiff(jetBaseline, jetConfig)}</Text>
+              <View style={{ marginTop: spacing.s }}>
+                <Input
+                  value={jetTestNote}
+                  onChangeText={setJetTestNote}
+                  placeholder="Testresultaat: bougiekleur, top, hoe hij reed"
+                />
+              </View>
+              <Button
+                label="Sproeierwissel opslaan"
+                onPress={saveJetChange}
+                loading={jetLogBusy}
+                disabled={buildJetChangeRows({ prev: jetBaseline, next: jetConfig, sim: jetSim }).length === 0}
+                style={{ marginTop: spacing.s }}
+              />
+              <Text style={styles.hint}>
+                Het mengselresultaat per gasstand gaat automatisch mee; het testresultaat vul je zelf in na de testrit.
+                Een leeg testresultaat wordt ook eerlijk als “nog geen testresultaat” gelogd.
+              </Text>
+
+              {jetLog.length > 0 ? (
+                <>
+                  <Text style={[styles.labelSmall, { marginTop: spacing.m }]}>LAATSTE SPROEIERWISSELS</Text>
+                  {jetLog.map((c) => (
+                    <View key={c.id} style={styles.jetLogRow}>
+                      <View style={styles.jetLogHead}>
+                        <Text style={styles.jetLogPart}>{c.part}</Text>
+                        <Text style={styles.jetLogDate}>{formatDateTime(c.changed_at)}</Text>
+                      </View>
+                      <Text style={styles.jetLogChange}>
+                        {c.old_value ?? '—'} <Text style={{ color: colors.primary }}>→</Text> {c.new_value ?? '—'}
+                      </Text>
+                      {c.result ? <Text style={styles.jetLogResult}>{c.result}</Text> : null}
+                      {c.notes ? <Text style={styles.jetLogNote}>{c.notes}</Text> : null}
+                    </View>
+                  ))}
+                  <Button
+                    label="Hele log in tuninggeschiedenis"
+                    variant="ghost"
+                    onPress={() => navigation.navigate('TuningHistory')}
+                  />
+                </>
+              ) : (
+                <Text style={styles.hint}>
+                  Nog geen sproeierwissels gelogd. Pas een sproeier aan en sla de wissel op — daarna staat hij hier en in
+                  de tuninggeschiedenis.
+                </Text>
+              )}
             </Card>
 
             <NumberedHeader n="4" title="AFSTELKAART PER GASSTAND" subtitle="Zie direct welk onderdeel bij welke gasstand de meeste invloed heeft." />
@@ -1333,6 +1458,20 @@ const styles = StyleSheet.create({
     padding: spacing.s,
   },
   circuitHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.s },
+  jetLogRow: {
+    marginTop: spacing.s,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.s,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    padding: spacing.s,
+  },
+  jetLogHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.s },
+  jetLogPart: { color: colors.text, fontSize: 13.5, fontWeight: '800' },
+  jetLogDate: { color: colors.textSubtle, fontSize: 11 },
+  jetLogChange: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 2 },
+  jetLogResult: { color: colors.success, fontSize: 12.5, marginTop: 3 },
+  jetLogNote: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   circuitLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
   circuitComponent: { color: colors.textSubtle, fontSize: 11.5, marginTop: 1 },
   planRow: { flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' },

@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
-import { Button, Card, EmptyState, Loading } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, Loading } from '@/components/ui';
+import { isJetChangePart } from '@/lib/jet-log';
 import { SlidersIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import * as tuningService from '@/services/tuning';
@@ -55,6 +56,8 @@ export default function TuningHistoryScreen() {
     }, [activeScooter]),
   );
 
+  const jetCount = changes.filter((c) => isJetChangePart(c.part)).length;
+
   if (loading) return <Loading label="Tuninggeschiedenis laden…" />;
 
   return (
@@ -65,6 +68,11 @@ export default function TuningHistoryScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View style={{ marginBottom: spacing.m }}>
+            {jetCount > 0 ? (
+              <Text style={styles.jetSummary}>
+                {`${jetCount} sproeierwissel${jetCount === 1 ? '' : 's'} gelogd vanuit de simulator — met mengselresultaat per gasstand en het testresultaat van die rit.`}
+              </Text>
+            ) : null}
             <Button
               label="Setup-rapport als PDF"
               variant="secondary"
@@ -85,7 +93,10 @@ export default function TuningHistoryScreen() {
         }
         renderItem={({ item }) => (
           <Card style={styles.card}>
-            <Text style={styles.part}>{item.part}</Text>
+            <View style={styles.partRow}>
+              <Text style={styles.part}>{item.part}</Text>
+              {isJetChangePart(item.part) ? <Badge label="sproeierwissel" tone="info" /> : null}
+            </View>
             {item.old_value || item.new_value ? (
               <Text style={styles.change}>
                 {item.old_value ?? '—'} <Text style={{ color: colors.primary }}>→</Text> {item.new_value ?? '—'}
@@ -95,7 +106,9 @@ export default function TuningHistoryScreen() {
               {formatDateTime(item.changed_at)}
               {item.km_at_change !== null ? ` · ${item.km_at_change.toLocaleString('nl-NL')} km` : ''}
             </Text>
-            {item.result ? <Text style={styles.result}>Resultaat: {item.result}</Text> : null}
+            {item.result ? (
+              <Text style={styles.result}>{`${isJetChangePart(item.part) ? 'Mengsel' : 'Resultaat'}: ${item.result}`}</Text>
+            ) : null}
             {item.notes ? <Text style={styles.notes}>{item.notes}</Text> : null}
           </Card>
         )}
@@ -109,6 +122,8 @@ const styles = StyleSheet.create({
   list: { padding: spacing.l },
   card: { marginBottom: spacing.m },
   part: { color: colors.text, fontWeight: '700', fontSize: 16 },
+  partRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.s },
+  jetSummary: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, marginBottom: spacing.m },
   change: { color: colors.text, fontSize: 15, marginTop: 2 },
   meta: { color: colors.textMuted, fontSize: 12.5, marginTop: 4 },
   result: { color: colors.success, fontSize: 13.5, marginTop: spacing.xs },
