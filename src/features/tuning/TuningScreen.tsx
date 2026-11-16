@@ -60,27 +60,56 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
   return (
     <SafeAreaView style={styles.safe} edges={embedded ? [] : ['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Button label="Afstelhulp openen" onPress={() => navigation.navigate('Afstel')} style={{ marginBottom: spacing.s }} />
+        <Text style={styles.sectionEyebrow}>TUNINGWERKPLAATS</Text>
+        <View style={styles.navRow}>
+          <Button
+            label="Setup configureren"
+            onPress={() => navigation.navigate('SetupDetail', {})}
+            style={styles.navBtn}
+          />
+          <Button label="Carburateur afstellen" onPress={() => navigation.navigate('Afstel')} style={styles.navBtn} />
+        </View>
+        <View style={styles.navRow}>
+          <Button label="Vertanding optimaliseren" onPress={() => navigation.navigate('Gearing')} style={styles.navBtn} />
+          <Button
+            label="Testritten en metingen"
+            onPress={() => navigation.navigate('PerformanceRun')}
+            style={styles.navBtn}
+          />
+        </View>
+        <View style={styles.navRow}>
+          <Button
+            label="Setup vergelijken"
+            onPress={() => navigation.navigate('SetupComparison')}
+            style={styles.navBtn}
+          />
+          <Button
+            label="Motordatabase"
+            variant="secondary"
+            onPress={() => navigation.navigate('EngineDatabase')}
+            style={styles.navBtn}
+          />
+        </View>
         <View style={styles.navRow}>
           <Button
             label="Dashboard"
-            variant="secondary"
+            variant="ghost"
             onPress={() => navigation.navigate('TuningDashboard')}
             style={styles.navBtn}
           />
           <Button
             label="Simulator"
-            variant="secondary"
+            variant="ghost"
             onPress={() => navigation.navigate('TuningSimulator')}
             style={styles.navBtn}
           />
+          <Button
+            label="Diagram"
+            variant="ghost"
+            onPress={() => navigation.navigate('CarbDiagram')}
+            style={styles.navBtn}
+          />
         </View>
-        <Button
-          label="Carburateurdiagram"
-          variant="secondary"
-          onPress={() => navigation.navigate('CarbDiagram')}
-          style={{ marginTop: spacing.s }}
-        />
         <View style={{ height: spacing.m }} />
         <SectionTitle>Huidige setup</SectionTitle>
         <Card>
@@ -171,7 +200,14 @@ const styles = StyleSheet.create({
   setupName: { color: colors.text, fontWeight: '700', fontSize: 16 },
   setupActions: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.m },
   setupBtn: { flex: 1, minHeight: 40 },
-  navRow: { flexDirection: 'row', gap: spacing.s },
+  navRow: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.s },
+  sectionEyebrow: {
+    color: colors.textSubtle,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: spacing.xs,
+  },
   navBtn: { flex: 1 },
   actionsRow: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.s, marginBottom: spacing.s },
   actionBtn: { flex: 1 },

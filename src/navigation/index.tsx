@@ -33,6 +33,8 @@ import AfstelScreen from '@/features/tuning/AfstelScreen';
 import TuningDashboardScreen from '@/features/tuning/TuningDashboardScreen';
 import TuningSimulatorScreen from '@/features/tuning/TuningSimulatorScreen';
 import CarbDiagramScreen from '@/features/tuning/CarbDiagramScreen';
+import GearingScreen from '@/features/tuning/GearingScreen';
+import EngineDatabaseScreen from '@/features/tuning/EngineDatabaseScreen';
 import TuningHistoryScreen from '@/features/tuning/TuningHistoryScreen';
 import SetupComparisonScreen from '@/features/tuning/SetupComparisonScreen';
 import PerformanceScreen from '@/features/performance/PerformanceScreen';
@@ -142,6 +144,8 @@ export default function AppNavigator() {
             <Stack.Screen name="TuningDashboard" component={TuningDashboardScreen} options={{ title: 'Tuning-dashboard' }} />
             <Stack.Screen name="TuningSimulator" component={TuningSimulatorScreen} options={{ title: 'Simulator' }} />
             <Stack.Screen name="CarbDiagram" component={CarbDiagramScreen} options={{ title: 'Carburateurdiagram' }} />
+            <Stack.Screen name="Gearing" component={GearingScreen} options={{ title: 'Vertanding' }} />
+            <Stack.Screen name="EngineDatabase" component={EngineDatabaseScreen} options={{ title: 'Motordatabase' }} />
             <Stack.Screen name="TuningHistory" component={TuningHistoryScreen} options={{ title: 'Tuninggeschiedenis' }} />
             <Stack.Screen name="SetupComparison" component={SetupComparisonScreen} options={{ title: 'Setups vergelijken' }} />
             <Stack.Screen name="PerformanceRun" component={PerformanceRunScreen} options={{ title: 'GPS-test' }} />
