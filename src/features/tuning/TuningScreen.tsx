@@ -75,6 +75,12 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
             style={styles.navBtn}
           />
         </View>
+        <Button
+          label="Carburateurdiagram"
+          variant="secondary"
+          onPress={() => navigation.navigate('CarbDiagram')}
+          style={{ marginTop: spacing.s }}
+        />
         <View style={{ height: spacing.m }} />
         <SectionTitle>Huidige setup</SectionTitle>
         <Card>

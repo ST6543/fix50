@@ -19,6 +19,7 @@ export type RootStackParamList = {
   Afstel: undefined;
   TuningDashboard: undefined;
   TuningSimulator: undefined;
+  CarbDiagram: undefined;
   TuningHistory: undefined;
   SetupComparison: undefined;
   PerformanceRun: undefined;

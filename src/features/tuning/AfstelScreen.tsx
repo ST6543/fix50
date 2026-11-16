@@ -773,6 +773,12 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                   <Text style={styles.mapComp}>{r.component}</Text>
                 </View>
               ))}
+              <Button
+                label="Open het carburateurdiagram"
+                variant="secondary"
+                onPress={() => navigation.navigate('CarbDiagram')}
+                style={{ marginTop: spacing.m }}
+              />
             </Card>
 
             <NumberedHeader n="5" title="BOUGIE LEZEN" subtitle="Na een volgas-test, het liefst met een nieuwe bougie." />
