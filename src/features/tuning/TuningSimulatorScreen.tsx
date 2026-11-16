@@ -24,12 +24,19 @@ import { colors, fonts, spacing } from '@/theme';
 import type { TuningSetup } from '@/types';
 
 type ScenarioKey = 'A' | 'B' | 'C';
-type Scenario = { key: ScenarioKey; name: string; color: string; enabled: boolean; cvt: CvtState };
+type Scenario = { key: ScenarioKey; name: string; color: string; dash: string; enabled: boolean; cvt: CvtState };
 
 const SCENARIO_COLORS: Record<ScenarioKey, string> = {
   A: colors.primary,
   B: colors.info,
   C: colors.success,
+};
+
+/** Eigen streepjespatroon per scenario, zodat overlappende lijnen te onderscheiden zijn. */
+const SCENARIO_DASH: Record<ScenarioKey, string> = {
+  A: '10 5',
+  B: '4 4',
+  C: '1 5',
 };
 
 const TONE: Record<ConfidenceLevel, 'success' | 'warning' | 'danger'> = {
@@ -40,9 +47,9 @@ const TONE: Record<ConfidenceLevel, 'success' | 'warning' | 'danger'> = {
 
 function makeScenarios(base: CvtState): Scenario[] {
   return [
-    { key: 'A', name: 'Huidig', color: SCENARIO_COLORS.A, enabled: true, cvt: { ...base } },
-    { key: 'B', name: 'Lichter', color: SCENARIO_COLORS.B, enabled: true, cvt: { ...base, roller: Math.max(3, base.roller - 1) } },
-    { key: 'C', name: 'Zwaarder', color: SCENARIO_COLORS.C, enabled: false, cvt: { ...base, roller: Math.min(13, base.roller + 1) } },
+    { key: 'A', name: 'Huidig', color: SCENARIO_COLORS.A, dash: SCENARIO_DASH.A, enabled: true, cvt: { ...base } },
+    { key: 'B', name: 'Lichter', color: SCENARIO_COLORS.B, dash: SCENARIO_DASH.B, enabled: true, cvt: { ...base, roller: Math.max(3, base.roller - 1.5) } },
+    { key: 'C', name: 'Zwaarder', color: SCENARIO_COLORS.C, dash: SCENARIO_DASH.C, enabled: true, cvt: { ...base, roller: Math.min(13, base.roller + 1.5) } },
   ];
 }
 
@@ -166,6 +173,10 @@ export default function TuningSimulatorScreen() {
       label: `${s.key} · ${s.name}`,
       color: s.color,
       dashed: true,
+      dash: s.dash,
+      // Het gekozen scenario blijft vol in beeld; de andere blijven zichtbaar maar gedempt.
+      opacity: s.key === selected ? 1 : 0.45,
+      width: s.key === selected ? 3 : 1.8,
       points: s.model.data.filter((d) => d.rpm !== null).map((d) => ({ x: d.speed, y: d.rpm as number })),
     }));
 

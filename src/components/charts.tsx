@@ -195,7 +195,16 @@ export function MultiLineChart({
   xUnit = 'km/u',
   yUnit = 'rpm',
 }: {
-  series: { label: string; color: string; dashed?: boolean; points: { x: number; y: number }[] }[];
+  series: {
+    label: string;
+    color: string;
+    dashed?: boolean;
+    dash?: string;
+    /** 1 = volle nadruk; lager dimt de lijn (bijv. niet-geselecteerde scenario's). */
+    opacity?: number;
+    width?: number;
+    points: { x: number; y: number }[];
+  }[];
   band?: { points: { x: number; yLow: number; yHigh: number }[]; color: string };
   height?: number;
   xMax?: number;
@@ -235,7 +244,7 @@ export function MultiLineChart({
         <Line x1={PAD.left} x2={W - PAD.right} y1={height - PAD.bottom} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} />
         <Line x1={PAD.left} x2={PAD.left} y1={PAD.top} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} />
 
-        {band && bandPoints ? <Polygon points={bandPoints} fill={band.color} opacity={0.16} /> : null}
+        {band && bandPoints ? <Polygon points={bandPoints} fill={band.color} opacity={0.22} /> : null}
 
         {series.map((s) => (
           <Polyline
@@ -243,10 +252,11 @@ export function MultiLineChart({
             points={s.points.map((p) => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ')}
             fill="none"
             stroke={s.color}
-            strokeWidth={2.4}
+            opacity={s.opacity ?? 1}
+            strokeWidth={s.width ?? 2.4}
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeDasharray={s.dashed ? '6 5' : undefined}
+            strokeDasharray={s.dash ?? (s.dashed ? '6 5' : undefined)}
           />
         ))}
       </Svg>
@@ -255,10 +265,8 @@ export function MultiLineChart({
         <Text style={styles.axisLabel}>
           {xMax} {xUnit}
         </Text>
-        <Text style={styles.axisLabel}>
-          {yMax.toLocaleString('nl-NL')} {yUnit}
-        </Text>
       </View>
+      <Text style={styles.axisNote}>verticale as: 0 – {yMax.toLocaleString('nl-NL')} {yUnit}</Text>
       <View style={styles.legendRow}>
         {series.map((s) => (
           <View key={s.label} style={styles.legendItem}>
@@ -295,6 +303,7 @@ const styles = StyleSheet.create({
   chartWrap: { alignSelf: 'stretch' },
   axisRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.xs },
   axisLabel: { color: colors.textMuted, fontSize: 12.5 },
+  axisNote: { color: colors.textSubtle, fontSize: 10.5, marginTop: 1 },
   legendRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.s, marginTop: spacing.s },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendSwatch: { width: 14, height: 3, borderRadius: 2 },
