@@ -212,8 +212,10 @@ export function MultiLineChart({
   xUnit?: string;
   yUnit?: string;
 }) {
-  const W = 340;
-  const PAD = { top: 12, bottom: 20, left: 30, right: 10 };
+  // Breed canvas dat met preserveAspectRatio="none" altijd de volle kaartbreedte vult.
+  // De lijnen gebruiken non-scaling-stroke, zodat ze op elk scherm even dik blijven.
+  const W = 1000;
+  const PAD = { top: 12, bottom: 20, left: 34, right: 14 };
   const innerW = W - PAD.left - PAD.right;
   const innerH = height - PAD.top - PAD.bottom;
   const px = (x: number) => PAD.left + (Math.min(Math.max(x, 0), xMax) / xMax) * innerW;
@@ -228,7 +230,7 @@ export function MultiLineChart({
 
   return (
     <View style={{ alignSelf: 'stretch' }}>
-      <Svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height}>
+      <Svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} preserveAspectRatio="none">
         {[0.25, 0.5, 0.75].map((f) => (
           <Line
             key={f}
@@ -239,10 +241,11 @@ export function MultiLineChart({
             stroke={colors.border}
             strokeWidth={1}
             strokeDasharray="3 6"
+            vectorEffect="non-scaling-stroke"
           />
         ))}
-        <Line x1={PAD.left} x2={W - PAD.right} y1={height - PAD.bottom} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} />
-        <Line x1={PAD.left} x2={PAD.left} y1={PAD.top} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} />
+        <Line x1={PAD.left} x2={W - PAD.right} y1={height - PAD.bottom} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <Line x1={PAD.left} x2={PAD.left} y1={PAD.top} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} vectorEffect="non-scaling-stroke" />
 
         {band && bandPoints ? <Polygon points={bandPoints} fill={band.color} opacity={0.22} /> : null}
 
@@ -257,6 +260,7 @@ export function MultiLineChart({
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeDasharray={s.dash ?? (s.dashed ? '6 5' : undefined)}
+            vectorEffect="non-scaling-stroke"
           />
         ))}
       </Svg>
