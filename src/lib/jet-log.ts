@@ -5,7 +5,7 @@
  *
  * De mengseluitslag is een richtlijn op basis van verhoudingen, geen meting.
  */
-import type { JetSimulation } from './jet-simulator';
+import type { CircuitId, JetSimulation } from './jet-simulator';
 
 export interface JetConfig {
   /** Gemonteerde hoofdsproeier. */
@@ -25,11 +25,30 @@ export interface JetChangeRow {
   newValue: string;
   /** Mengselresultaat per gasstand. */
   result: string;
-  /** Testresultaat van de gebruiker, of een eerlijke melding dat het er nog niet is. */
+  /** Testresultaat + mengseldetail + volgende stap, zoals opgeslagen in de log. */
   notes: string;
+  /** De volgende stap voor het circuit dat bij dit onderdeel hoort. */
+  nextStep: string;
 }
 
 export const NO_TEST_RESULT = 'Nog geen testresultaat — na de testrit bougiekleur of topsnelheid invullen.';
+
+/** Marker waarmee de volgende stap in de notitie wordt vastgelegd. */
+export const NEXT_STEP_PREFIX = 'Volgende stap: ';
+
+/** Welk circuit hoort bij een gewijzigd onderdeel? */
+export function circuitForKey(key: keyof JetConfig): CircuitId {
+  if (key === 'clip') return 'mid';
+  if (key === 'mainJet') return 'full';
+  return 'idle';
+}
+
+/** Volgende stap uit de simulator voor het circuit van dit onderdeel. */
+export function nextStepFor(key: keyof JetConfig, sim: JetSimulation): string {
+  const id = circuitForKey(key);
+  const circuit = sim.circuits.find((c) => c.id === id);
+  return circuit?.nextTest ?? 'Test opnieuw en lees de bougie.';
+}
 
 /** Onderdelen die als sproeierwissel in de log horen. */
 export const JET_PART_LABELS = ['Hoofdsproeier', 'Stationairsproeier', 'Naaldclip', 'Luchtschroef'] as const;
@@ -89,7 +108,7 @@ export function buildJetChangeRows(args: {
 
   const result = mixtureLine(args.sim);
   const note = args.testNote?.trim();
-  const notes = note && note.length > 0 ? `${note} — ${mixtureDetail(args.sim)}` : NO_TEST_RESULT;
+  const base = note && note.length > 0 ? `${note} — ${mixtureDetail(args.sim)}` : NO_TEST_RESULT;
 
   return changes.map((c) => {
     const part =
@@ -100,14 +119,33 @@ export function buildJetChangeRows(args: {
           : c.key === 'clip'
             ? 'Naaldclip'
             : 'Luchtschroef';
+    const nextStep = nextStepFor(c.key, args.sim);
     return {
       part,
       oldValue: formatJetValue(c.key, c.from),
       newValue: formatJetValue(c.key, c.to),
       result,
-      notes,
+      notes: `${base} · ${NEXT_STEP_PREFIX}${nextStep}`,
+      nextStep,
     };
   });
+}
+
+/**
+ * Splitst een opgeslagen notitie weer in het testresultaat en de volgende stap.
+ * Oudere regels zonder volgende stap geven die als null terug.
+ */
+export function splitJetNotes(notes: string | null | undefined): { testNote: string | null; nextStep: string | null } {
+  const raw = (notes ?? '').trim();
+  if (raw.length === 0) return { testNote: null, nextStep: null };
+  const idx = raw.indexOf(NEXT_STEP_PREFIX);
+  if (idx === -1) return { testNote: raw, nextStep: null };
+  const testNote = raw.slice(0, idx).replace(/[·\s]+$/, '').trim();
+  const nextStep = raw.slice(idx + NEXT_STEP_PREFIX.length).trim();
+  return {
+    testNote: testNote.length > 0 ? testNote : null,
+    nextStep: nextStep.length > 0 ? nextStep : null,
+  };
 }
 
 /** Korte samenvatting voor de knop/het logblok in de simulator. */

@@ -16,7 +16,7 @@ import type { TuningChange, TuningSetup } from '@/types';
 import { shrinkForScan } from '@/lib/image-shrink';
 import { scanPlugPhoto, type PlugScanResult } from '@/services/plug-scan';
 import { calculateJetSimulation, idleJetTarget, type Mixture } from '@/lib/jet-simulator';
-import { buildJetChangeRows, describeJetDiff, isJetChangePart, type JetConfig } from '@/lib/jet-log';
+import { buildJetChangeRows, describeJetDiff, isJetChangePart, splitJetNotes, type JetConfig } from '@/lib/jet-log';
 import { formatDateTime } from '@/lib/format';
 import {
   calculateCarb,
@@ -863,19 +863,23 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
               {jetLog.length > 0 ? (
                 <>
                   <Text style={[styles.labelSmall, { marginTop: spacing.m }]}>LAATSTE SPROEIERWISSELS</Text>
-                  {jetLog.map((c) => (
-                    <View key={c.id} style={styles.jetLogRow}>
-                      <View style={styles.jetLogHead}>
-                        <Text style={styles.jetLogPart}>{c.part}</Text>
-                        <Text style={styles.jetLogDate}>{formatDateTime(c.changed_at)}</Text>
+                  {jetLog.map((c) => {
+                    const { testNote, nextStep } = splitJetNotes(c.notes);
+                    return (
+                      <View key={c.id} style={styles.jetLogRow}>
+                        <View style={styles.jetLogHead}>
+                          <Text style={styles.jetLogPart}>{c.part}</Text>
+                          <Text style={styles.jetLogDate}>{formatDateTime(c.changed_at)}</Text>
+                        </View>
+                        <Text style={styles.jetLogChange}>
+                          {c.old_value ?? '—'} <Text style={{ color: colors.primary }}>→</Text> {c.new_value ?? '—'}
+                        </Text>
+                        {c.result ? <Text style={styles.jetLogResult}>{c.result}</Text> : null}
+                        {testNote ? <Text style={styles.jetLogNote}>{testNote}</Text> : null}
+                        {nextStep ? <Text style={styles.jetLogNext}>{`Volgende stap: ${nextStep}`}</Text> : null}
                       </View>
-                      <Text style={styles.jetLogChange}>
-                        {c.old_value ?? '—'} <Text style={{ color: colors.primary }}>→</Text> {c.new_value ?? '—'}
-                      </Text>
-                      {c.result ? <Text style={styles.jetLogResult}>{c.result}</Text> : null}
-                      {c.notes ? <Text style={styles.jetLogNote}>{c.notes}</Text> : null}
-                    </View>
-                  ))}
+                    );
+                  })}
                   <Button
                     label="Hele log in tuninggeschiedenis"
                     variant="ghost"
@@ -1472,6 +1476,7 @@ const styles = StyleSheet.create({
   jetLogChange: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 2 },
   jetLogResult: { color: colors.success, fontSize: 12.5, marginTop: 3 },
   jetLogNote: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  jetLogNext: { color: colors.primary, fontSize: 12, lineHeight: 17, marginTop: 3, fontWeight: '600' },
   circuitLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
   circuitComponent: { color: colors.textSubtle, fontSize: 11.5, marginTop: 1 },
   planRow: { flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' },

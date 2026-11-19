@@ -6,7 +6,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
 import { Badge, Button, Card, EmptyState, Loading } from '@/components/ui';
-import { isJetChangePart } from '@/lib/jet-log';
+import { isJetChangePart, splitJetNotes } from '@/lib/jet-log';
 import { SlidersIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import * as tuningService from '@/services/tuning';
@@ -70,7 +70,7 @@ export default function TuningHistoryScreen() {
           <View style={{ marginBottom: spacing.m }}>
             {jetCount > 0 ? (
               <Text style={styles.jetSummary}>
-                {`${jetCount} sproeierwissel${jetCount === 1 ? '' : 's'} gelogd vanuit de simulator — met mengselresultaat per gasstand en het testresultaat van die rit.`}
+                {`${jetCount} sproeierwissel${jetCount === 1 ? '' : 's'} gelogd vanuit de simulator — met mengselresultaat per gasstand, het testresultaat van die rit en de volgende stap.`}
               </Text>
             ) : null}
             <Button
@@ -91,27 +91,33 @@ export default function TuningHistoryScreen() {
             onAction={() => navigation.navigate('SetupDetail', {})}
           />
         }
-        renderItem={({ item }) => (
-          <Card style={styles.card}>
-            <View style={styles.partRow}>
-              <Text style={styles.part}>{item.part}</Text>
-              {isJetChangePart(item.part) ? <Badge label="sproeierwissel" tone="info" /> : null}
-            </View>
-            {item.old_value || item.new_value ? (
-              <Text style={styles.change}>
-                {item.old_value ?? '—'} <Text style={{ color: colors.primary }}>→</Text> {item.new_value ?? '—'}
+        renderItem={({ item }) => {
+          const { testNote, nextStep } = splitJetNotes(item.notes);
+          return (
+            <Card style={styles.card}>
+              <View style={styles.partRow}>
+                <Text style={styles.part}>{item.part}</Text>
+                {isJetChangePart(item.part) ? <Badge label="sproeierwissel" tone="info" /> : null}
+              </View>
+              {item.old_value || item.new_value ? (
+                <Text style={styles.change}>
+                  {item.old_value ?? '—'} <Text style={{ color: colors.primary }}>→</Text> {item.new_value ?? '—'}
+                </Text>
+              ) : null}
+              <Text style={styles.meta}>
+                {formatDateTime(item.changed_at)}
+                {item.km_at_change !== null ? ` · ${item.km_at_change.toLocaleString('nl-NL')} km` : ''}
               </Text>
-            ) : null}
-            <Text style={styles.meta}>
-              {formatDateTime(item.changed_at)}
-              {item.km_at_change !== null ? ` · ${item.km_at_change.toLocaleString('nl-NL')} km` : ''}
-            </Text>
-            {item.result ? (
-              <Text style={styles.result}>{`${isJetChangePart(item.part) ? 'Mengsel' : 'Resultaat'}: ${item.result}`}</Text>
-            ) : null}
-            {item.notes ? <Text style={styles.notes}>{item.notes}</Text> : null}
-          </Card>
-        )}
+              {item.result ? (
+                <Text style={styles.result}>{`${isJetChangePart(item.part) ? 'Mengsel' : 'Resultaat'}: ${item.result}`}</Text>
+              ) : null}
+              {testNote ? <Text style={styles.notes}>{testNote}</Text> : null}
+              {nextStep ? (
+                <Text style={styles.nextStep}>{`Volgende stap: ${nextStep}`}</Text>
+              ) : null}
+            </Card>
+          );
+        }}
       />
     </SafeAreaView>
   );
@@ -128,4 +134,5 @@ const styles = StyleSheet.create({
   meta: { color: colors.textMuted, fontSize: 12.5, marginTop: 4 },
   result: { color: colors.success, fontSize: 13.5, marginTop: spacing.xs },
   notes: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
+  nextStep: { color: colors.primary, fontSize: 13, lineHeight: 18, marginTop: 4, fontWeight: '600' },
 });

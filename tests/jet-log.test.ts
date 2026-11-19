@@ -3,12 +3,15 @@ import { calculateJetSimulation, idleJetTarget, type JetInput } from '@/lib/jet-
 import type { CarbResult } from '@/lib/afstel';
 import {
   buildJetChangeRows,
+  circuitForKey,
   describeJetDiff,
   diffJets,
   formatJetValue,
   isJetChangePart,
   mixtureLine,
+  nextStepFor,
   NO_TEST_RESULT,
+  splitJetNotes,
   type JetConfig,
 } from '@/lib/jet-log';
 
@@ -97,8 +100,50 @@ describe('buildJetChangeRows', () => {
       sim: sim({ mainJet: 96 }),
     });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.notes).toBe(NO_TEST_RESULT);
+    expect(rows[0]!.notes.startsWith(NO_TEST_RESULT)).toBe(true);
     expect(rows[0]!.result).toContain('volgas');
+  });
+
+  it('zet de volgende stap van het passende circuit in de logregel', () => {
+    const next = config({ mainJet: 96, clip: 4, idleJet: 30 });
+    const rows = buildJetChangeRows({ prev: config(), next, sim: sim({ mainJet: 96, clip: 4, idleJet: 30 }) });
+    const byPart = new Map(rows.map((r) => [r.part, r]));
+
+    expect(byPart.get('Hoofdsproeier')!.nextStep).toContain('sproeier');
+    expect(byPart.get('Naaldclip')!.nextStep).toContain('naaldclip');
+    expect(byPart.get('Stationairsproeier')!.nextStep).toContain('luchtschroef');
+    expect(byPart.get('Hoofdsproeier')!.notes).toContain(byPart.get('Hoofdsproeier')!.nextStep);
+  });
+
+  it('houdt de volgende stap ook bij een lege notitie leesbaar', () => {
+    const rows = buildJetChangeRows({ prev: config(), next: config({ mainJet: 96 }), sim: sim({ mainJet: 96 }) });
+    const parts = splitJetNotes(rows[0]!.notes);
+    expect(parts.testNote).toBe(NO_TEST_RESULT);
+    expect(parts.nextStep).toBe(rows[0]!.nextStep);
+  });
+});
+
+describe('circuitForKey / nextStepFor', () => {
+  it('koppelt elk onderdeel aan het juiste gasbereik', () => {
+    expect(circuitForKey('mainJet')).toBe('full');
+    expect(circuitForKey('clip')).toBe('mid');
+    expect(circuitForKey('idleJet')).toBe('idle');
+    expect(circuitForKey('airScrew')).toBe('idle');
+    expect(nextStepFor('mainJet', sim())).toContain('volgas-test');
+  });
+});
+
+describe('splitJetNotes', () => {
+  it('splitst het testresultaat van de volgende stap', () => {
+    const { testNote, nextStep } = splitJetNotes('bougie koffiebruin · Volgende stap: Monteer een sproeier groter (één stap).');
+    expect(testNote).toBe('bougie koffiebruin');
+    expect(nextStep).toBe('Monteer een sproeier groter (één stap).');
+  });
+
+  it('laat oudere regels zonder volgende stap intact', () => {
+    expect(splitJetNotes('alleen een testresultaat')).toEqual({ testNote: 'alleen een testresultaat', nextStep: null });
+    expect(splitJetNotes(null)).toEqual({ testNote: null, nextStep: null });
+    expect(splitJetNotes('   ')).toEqual({ testNote: null, nextStep: null });
   });
 });
 
