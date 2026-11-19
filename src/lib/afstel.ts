@@ -5,6 +5,8 @@
  * Interceptieniveaus zijn richtlijnen ("startpunt om af te stellen"), geen exacte waarden.
  */
 
+import { THROTTLE_BANDS, type ThrottleBandId } from './throttle-bands';
+
 // ── Carburateur ────────────────────────────────────────────────────────
 
 export type CarbMaterial = 'ijzer' | 'alu';
@@ -108,12 +110,18 @@ function calculateCarb(input: CarbInput): CarbResult {
   return { jetLow, jetHigh, clip, heat, plug, powerbandRpm };
 }
 
+/** Welk onderdeel de gasstand vooral bepaalt; de banden zelf komen uit throttle-bands. */
+const THROTTLE_MAP_COMPONENTS: Record<ThrottleBandId, string> = {
+  idle: 'Stationaircircuit, luchtschroef en gasklepaanslag',
+  mid: 'Vooral de gasnaald en clippositie',
+  full: 'Vooral de hoofdsproeier en brandstoftoevoer',
+};
+
 /** Afstelkaart: welk carburateuronderdeel beheert welke gasstand. */
-export const THROTTLE_MAP: { range: string; component: string }[] = [
-  { range: '0 tot ±1/8 gas', component: 'Stationaircircuit, luchtschroef en gasklepaanslag' },
-  { range: '±1/8 tot ±3/4 gas', component: 'Vooral de gasnaald en clippositie' },
-  { range: '±3/4 tot volgas', component: 'Vooral de hoofdsproeier en brandstoftoevoer' },
-];
+export const THROTTLE_MAP: { range: string; component: string }[] = THROTTLE_BANDS.map((band) => ({
+  range: band.range,
+  component: THROTTLE_MAP_COMPONENTS[band.id],
+}));
 
 export interface CarbDiagnosis {
   id: 'arm' | 'rich' | 'mid' | 'idle' | 'start';

@@ -6,9 +6,10 @@
  * mengverhouding hangt ook af van luchtstroming, belasting en luchtdruk.
  */
 import type { CarbResult } from './afstel';
+import { throttleBandLabel, type ThrottleBandId } from './throttle-bands';
 
 export type Mixture = 'arm' | 'iets arm' | 'goed' | 'iets rijk' | 'rijk';
-export type CircuitId = 'idle' | 'mid' | 'full';
+export type CircuitId = ThrottleBandId;
 
 export interface JetInput {
   /** Startadvies uit calculateCarb. */
@@ -85,7 +86,7 @@ export function calculateJetSimulation(input: JetInput): JetSimulation {
   const circuits: CircuitAssessment[] = [
     {
       id: 'idle',
-      label: '0 – 1/8 gas',
+      label: throttleBandLabel('idle'),
       component: 'Stationairsproeier en luchtschroef',
       mixture: mixtureForDelta(clamp(idleTotal, -3, 3)),
       delta: idleTotal,
@@ -102,7 +103,7 @@ export function calculateJetSimulation(input: JetInput): JetSimulation {
     },
     {
       id: 'mid',
-      label: '1/8 – 3/4 gas',
+      label: throttleBandLabel('mid'),
       component: 'Gasnaald en clippositie',
       mixture: mixtureForDelta(clamp(midTotal, -3, 3)),
       delta: midTotal,
@@ -119,7 +120,7 @@ export function calculateJetSimulation(input: JetInput): JetSimulation {
     },
     {
       id: 'full',
-      label: '3/4 – volgas',
+      label: throttleBandLabel('full'),
       component: 'Hoofdsproeier',
       mixture: mixtureForDelta(clamp(mainDelta, -3, 3)),
       delta: mainDelta,

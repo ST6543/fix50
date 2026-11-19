@@ -5,14 +5,20 @@
  * 2-takt (zoals de standaard Dell'Orto/Keihin-achtige carburateurs). Het is een
  * schema, geen fabrieksdoorsnede: maten en kanalen verschillen per model.
  *
- * De banden sluiten aan op de afstelkaart in de Afstelhulp (0–1/8, 1/8–3/4,
- * 3/4–volgas), zodat beide schermen dezelfde taal spreken.
+ * De banden komen uit throttle-bands.ts, dezelfde bron als de afstelkaart en
+ * de sproeier-simulator, zodat alle schermen dezelfde taal spreken.
  */
+import {
+  IDLE_MAX_PCT,
+  MID_MAX_PCT,
+  throttleBandLabel,
+  type ThrottleBandId,
+} from './throttle-bands';
 
 /** Gasstandsband waarin een onderdeel het mengsel vooral bepaalt. */
 export type CarbBand = 'altijd' | 'stationair' | 'halfgas' | 'volgas' | 'koude start';
 
-export type CarbCircuitId = 'idle' | 'mid' | 'full';
+export type CarbCircuitId = ThrottleBandId;
 
 export type CarbPartId =
   | 'luchtfilter'
@@ -43,9 +49,9 @@ export interface CarbPart {
 
 export const CARB_BAND_LABELS: Record<CarbBand, string> = {
   altijd: 'altijd actief',
-  stationair: '0 – 1/8 gas',
-  halfgas: '1/8 – 3/4 gas',
-  volgas: '3/4 – volgas',
+  stationair: throttleBandLabel('idle'),
+  halfgas: throttleBandLabel('mid'),
+  volgas: throttleBandLabel('full'),
   'koude start': 'alleen koude start',
 };
 
@@ -192,9 +198,8 @@ export const CARB_PARTS_BY_ID: Record<CarbPartId, CarbPart> = CARB_PARTS.reduce(
   {} as Record<CarbPartId, CarbPart>,
 );
 
-/** Grenzen van de gasstandsbanden, in procenten gas. */
-export const IDLE_MAX_PCT = 12.5;
-export const MID_MAX_PCT = 75;
+/** Grenzen van de gasstandsbanden, in procenten gas (bron: throttle-bands.ts). */
+export { IDLE_MAX_PCT, MID_MAX_PCT };
 
 export interface CarbThrottleBand {
   id: CarbCircuitId;
@@ -209,19 +214,19 @@ export interface CarbThrottleBand {
 export const CARB_THROTTLE_BANDS: Record<CarbCircuitId, CarbThrottleBand> = {
   idle: {
     id: 'idle',
-    range: '0 – 1/8 gas',
+    range: throttleBandLabel('idle'),
     component: 'Stationaircircuit: stationairsproeier en luchtschroef',
     why: 'De schuif staat bijna dicht en de luchtstroom is klein. Daarom doet het aparte stationairkanaal hier het werk.',
   },
   mid: {
     id: 'mid',
-    range: '1/8 – 3/4 gas',
+    range: throttleBandLabel('mid'),
     component: 'Gasnaald en naaldsproeier',
     why: 'De schuif is deels open; de naald hangt in de verstuiverbuis en bepaalt met zijn clipstand het mengsel.',
   },
   full: {
     id: 'full',
-    range: '3/4 – volgas',
+    range: throttleBandLabel('full'),
     component: 'Hoofdsproeier',
     why: 'De schuif staat (bijna) helemaal open en de naald is uit de buis: nu bepaalt de hoofdsproeier de brandstof.',
   },
