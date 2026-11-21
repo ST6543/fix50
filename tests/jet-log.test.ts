@@ -11,6 +11,7 @@ import {
   formatJetValue,
   isJetChangePart,
   JET_BATCH_WINDOW_MS,
+  jetUndoNotice,
   latestPendingJetIds,
   measuredResultLine,
   mixtureLine,
@@ -258,6 +259,15 @@ describe('describeJetDiff', () => {
   it('toont het verschil of meldt dat er niets is gewijzigd', () => {
     expect(describeJetDiff(config(), config())).toContain('Geen wijziging');
     expect(describeJetDiff(config(), config({ mainJet: 96 }))).toBe('94 → 96');
+  });
+});
+
+describe('jetUndoNotice', () => {
+  it('noemt het aantal regels van de verwijderde wissel', () => {
+    expect(jetUndoNotice([{}])).toBe('Sproeierwissel verwijderd — je kunt dit nog ongedaan maken.');
+    expect(jetUndoNotice([{}, {}, {}])).toBe(
+      'Sproeierwissel van 3 regels verwijderd — je kunt dit nog ongedaan maken.',
+    );
   });
 });
 

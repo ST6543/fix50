@@ -22,6 +22,7 @@ import {
   describeJetDiff,
   groupJetChanges,
   isJetChangePart,
+  jetUndoNotice,
   measuredResultLine,
   splitJetNotes,
   type JetConfig,
@@ -268,6 +269,8 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const [jetEdit, setJetEdit] = useState<JetEdit | null>(null);
   // Welke wissel wacht op bevestiging voordat hij verwijderd wordt?
   const [jetDeleteId, setJetDeleteId] = useState<string | null>(null);
+  // Zojuist verwijderde wissel, klaar om terug te zetten (ongedaan maken).
+  const [jetUndo, setJetUndo] = useState<TuningChange[] | null>(null);
   const jetConfig: JetConfig = { mainJet, idleJet, clip: needleClip, airScrew };
 
   const jetSim = useMemo(
@@ -365,6 +368,8 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
 
   // ── Sproeierlog laden (alleen regels uit de simulator) ───────
   useEffect(() => {
+    // Een andere scooter: een bewaarde verwijdering hoort daar niet meer bij.
+    setJetUndo(null);
     if (!activeScooter) {
       setJetLog([]);
       return;
@@ -647,10 +652,28 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
       await tuningService.deleteChanges(group.map((c) => c.id));
       if (jetEdit && group.some((c) => c.id === jetEdit.key)) setJetEdit(null);
       setJetDeleteId(null);
+      // Bewaar de regels zodat een verkeerde klik terug te draaien is.
+      setJetUndo(group);
       await refreshJetLog();
-      setLogNote('Sproeierwissel verwijderd uit het log.');
+      setLogNote(jetUndoNotice(group));
     } catch {
       setLogNote('Verwijderen mislukt — controleer je verbinding.');
+    } finally {
+      setJetLogBusy(false);
+    }
+  }
+
+  /** Zet de zojuist verwijderde wissel terug, met dezelfde id en hetzelfde tijdstip. */
+  async function undoJetDelete() {
+    if (!jetUndo) return;
+    setJetLogBusy(true);
+    try {
+      await tuningService.restoreChanges(jetUndo);
+      setJetUndo(null);
+      await refreshJetLog();
+      setLogNote('Verwijderen ongedaan gemaakt — de wissel staat weer in het log.');
+    } catch {
+      setLogNote('Ongedaan maken mislukt — controleer je verbinding.');
     } finally {
       setJetLogBusy(false);
     }
@@ -1003,6 +1026,20 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 Het mengselresultaat per gasstand gaat automatisch mee; het testresultaat vul je zelf in na de testrit.
                 Een leeg testresultaat wordt ook eerlijk als “nog geen testresultaat” gelogd.
               </Text>
+
+              {jetUndo ? (
+                <View style={styles.jetUndoBlock}>
+                  <Text style={styles.jetUndoText}>{jetUndoNotice(jetUndo)}</Text>
+                  <Pressable
+                    style={styles.sugApply}
+                    disabled={jetLogBusy}
+                    accessibilityLabel="Verwijderen ongedaan maken"
+                    onPress={() => void undoJetDelete()}
+                  >
+                    <Text style={styles.sugApplyText}>{jetLogBusy ? 'Bezig…' : 'Ongedaan maken'}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
 
               {jetGroups.length > 0 ? (
                 <>
@@ -1695,6 +1732,16 @@ const styles = StyleSheet.create({
   circuitCardFocus: { borderColor: colors.primary, backgroundColor: colors.primarySubtle },
   circuitFocusNote: { color: colors.primary, fontSize: 12, fontWeight: '700', marginTop: 3 },
   circuitHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.s },
+  jetUndoBlock: {
+    marginTop: spacing.s,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radii.s,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    padding: spacing.s,
+    gap: spacing.xs,
+  },
+  jetUndoText: { color: colors.text, fontSize: 12.5, lineHeight: 18 },
   jetLogRow: {
     marginTop: spacing.s,
     backgroundColor: colors.surfaceAlt,

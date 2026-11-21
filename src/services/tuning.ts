@@ -108,6 +108,31 @@ export async function deleteChanges(ids: UUID[]): Promise<void> {
   await query<void>(() => supabase.from('tuning_changes').delete().in('id', ids));
 }
 
+/**
+ * Zet verwijderde wissels terug, met hun oorspronkelijke id en tijdstip, zodat
+ * een gekoppelde GPS-meting en de plek in de geschiedenis bewaard blijven.
+ */
+export async function restoreChanges(rows: TuningChange[]): Promise<void> {
+  if (rows.length === 0) return;
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) throw new Error('Niet ingelogd');
+  const payload = rows.map((row) => ({
+    id: row.id,
+    user_id: user.user!.id,
+    scooter_id: row.scooter_id,
+    setup_id: row.setup_id ?? null,
+    run_id: row.run_id ?? null,
+    changed_at: row.changed_at,
+    km_at_change: row.km_at_change ?? null,
+    part: row.part,
+    old_value: row.old_value ?? null,
+    new_value: row.new_value ?? null,
+    result: row.result ?? null,
+    notes: row.notes ?? null,
+  }));
+  await query<void>(() => supabase.from('tuning_changes').insert(payload));
+}
+
 export async function addChange(args: {
   scooterId: UUID;
   setupId?: UUID | null;

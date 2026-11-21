@@ -227,6 +227,16 @@ function fmtDecimal(value: number, digits: number): string {
 }
 
 /**
+ * Melding na het verwijderen van een gelogde wissel. Bewust met het aantal
+ * regels, zodat duidelijk is dat een wissel uit meerdere regels kan bestaan.
+ */
+export function jetUndoNotice(rows: readonly unknown[]): string {
+  return rows.length === 1
+    ? 'Sproeierwissel verwijderd — je kunt dit nog ongedaan maken.'
+    : `Sproeierwissel van ${rows.length} regels verwijderd — je kunt dit nog ongedaan maken.`;
+}
+
+/**
  * Het gemeten resultaat van de gekoppelde GPS-test: top en 0–50, met de
  * GPS-kwaliteit erbij. Ontbrekende waarden worden eerlijk benoemd, niet
  * weggelaten of geschat.
