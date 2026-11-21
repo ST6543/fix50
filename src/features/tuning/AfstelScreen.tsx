@@ -16,7 +16,16 @@ import type { TuningChange, TuningSetup } from '@/types';
 import { shrinkForScan } from '@/lib/image-shrink';
 import { scanPlugPhoto, type PlugScanResult } from '@/services/plug-scan';
 import { calculateJetSimulation, idleJetTarget, type Mixture } from '@/lib/jet-simulator';
-import { buildJetChangeRows, describeJetDiff, isJetChangePart, splitJetNotes, type JetConfig } from '@/lib/jet-log';
+import {
+  buildJetChangeRows,
+  composeJetNotes,
+  describeJetDiff,
+  groupJetChanges,
+  isJetChangePart,
+  measuredResultLine,
+  splitJetNotes,
+  type JetConfig,
+} from '@/lib/jet-log';
 import { formatDateTime } from '@/lib/format';
 import {
   calculateCarb,
@@ -52,6 +61,14 @@ import {
 
 const CC_OPTIONS = [50, 65, 70, 80];
 const CARB_MM_OPTIONS = [12.5, 14, 16, 17.5, 19, 21, 24, 26, 28];
+
+/** Hoeveel regels/wissels het logblok laat zien. */
+const JET_LOG_ROWS = 24;
+const JET_LOG_GROUPS = 4;
+
+/** Eén regel binnen een correctie: de oorspronkelijke waarden plus zijn eigen volgende stap. */
+type JetEditRow = { id: string; part: string; oldValue: string; newValue: string; nextStep: string | null };
+type JetEdit = { key: string; note: string; rows: JetEditRow[] };
 
 function numFromText(value: string | null | undefined, fallback: number): number {
   const m = value?.match(/[\d.,]+/);
@@ -211,6 +228,10 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const [jetTestNote, setJetTestNote] = useState('');
   const [jetLog, setJetLog] = useState<TuningChange[]>([]);
   const [jetLogBusy, setJetLogBusy] = useState(false);
+  // Welke gelogde wissel wordt op dit moment gecorrigeerd?
+  const [jetEdit, setJetEdit] = useState<JetEdit | null>(null);
+  // Welke wissel wacht op bevestiging voordat hij verwijderd wordt?
+  const [jetDeleteId, setJetDeleteId] = useState<string | null>(null);
   const jetConfig: JetConfig = { mainJet, idleJet, clip: needleClip, airScrew };
 
   const jetSim = useMemo(
@@ -316,7 +337,7 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
     tuningService
       .listChanges(activeScooter.id)
       .then((rows) => {
-        if (!cancelled) setJetLog(rows.filter((r) => isJetChangePart(r.part)).slice(0, 6));
+        if (!cancelled) setJetLog(rows.filter((r) => isJetChangePart(r.part)).slice(0, JET_LOG_ROWS));
       })
       .catch(() => undefined);
     return () => {
@@ -513,9 +534,9 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
       setJetBaseline(jetConfig);
       setJetTestNote('');
       const list = await tuningService.listChanges(activeScooter.id);
-      setJetLog(list.filter((r) => isJetChangePart(r.part)).slice(0, 6));
+      setJetLog(list.filter((r) => isJetChangePart(r.part)).slice(0, JET_LOG_ROWS));
       setLogNote(
-        `${rows.length} sproeierwijziging${rows.length === 1 ? '' : 'en'} met mengselresultaat opgeslagen in de tuninggeschiedenis.`,
+        `${rows.length} sproeierwijziging${rows.length === 1 ? '' : 'en'} opgeslagen — de eerstvolgende GPS-test wordt automatisch als testresultaat gekoppeld.`,
       );
     } catch {
       setLogNote('Opslaan van de sproeierwissel mislukt — controleer je verbinding.');
@@ -523,6 +544,81 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
       setJetLogBusy(false);
     }
   };
+
+  const jetGroups = useMemo(() => groupJetChanges(jetLog).slice(0, JET_LOG_GROUPS), [jetLog]);
+
+  /** Laadt de nieuwste sproeierwissels opnieuw na een correctie of verwijdering. */
+  async function refreshJetLog() {
+    if (!activeScooter) return;
+    const rows = await tuningService.listChanges(activeScooter.id);
+    setJetLog(rows.filter((r) => isJetChangePart(r.part)).slice(0, JET_LOG_ROWS));
+  }
+
+  /** Zet een gelogde wissel in de corrigeerstand, met de waarden zoals ze er nu staan. */
+  function startJetEdit(group: TuningChange[]) {
+    const first = group[0];
+    if (!first) return;
+    setJetEdit({
+      key: first.id,
+      note: splitJetNotes(first.notes).testNote ?? '',
+      rows: group.map((c) => ({
+        id: c.id,
+        part: c.part,
+        oldValue: c.old_value ?? '',
+        newValue: c.new_value ?? '',
+        nextStep: splitJetNotes(c.notes).nextStep,
+      })),
+    });
+  }
+
+  function editJetRow(id: string, field: 'oldValue' | 'newValue', value: string) {
+    setJetEdit((prev) =>
+      prev ? { ...prev, rows: prev.rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)) } : prev,
+    );
+  }
+
+  const saveJetEdit = async () => {
+    if (!jetEdit) return;
+    setJetLogBusy(true);
+    try {
+      for (const row of jetEdit.rows) {
+        await tuningService.updateChange(row.id, {
+          old_value: row.oldValue.trim() || null,
+          new_value: row.newValue.trim() || null,
+          notes: composeJetNotes(jetEdit.note, row.nextStep),
+        });
+      }
+      setJetEdit(null);
+      await refreshJetLog();
+      setLogNote('Sproeierwissel gecorrigeerd in het log.');
+    } catch {
+      setLogNote('Correctie opslaan mislukt — controleer je verbinding.');
+    } finally {
+      setJetLogBusy(false);
+    }
+  };
+
+  function confirmDeleteJetGroup(group: TuningChange[]) {
+    const first = group[0];
+    if (!first) return;
+    setJetEdit(null);
+    setJetDeleteId(first.id);
+  }
+
+  async function deleteJetGroup(group: TuningChange[]) {
+    setJetLogBusy(true);
+    try {
+      await tuningService.deleteChanges(group.map((c) => c.id));
+      if (jetEdit && group.some((c) => c.id === jetEdit.key)) setJetEdit(null);
+      setJetDeleteId(null);
+      await refreshJetLog();
+      setLogNote('Sproeierwissel verwijderd uit het log.');
+    } catch {
+      setLogNote('Verwijderen mislukt — controleer je verbinding.');
+    } finally {
+      setJetLogBusy(false);
+    }
+  }
 
   const saveGear = async () => {
     if (!activeScooter) return;
@@ -860,23 +956,110 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 Een leeg testresultaat wordt ook eerlijk als “nog geen testresultaat” gelogd.
               </Text>
 
-              {jetLog.length > 0 ? (
+              {jetGroups.length > 0 ? (
                 <>
                   <Text style={[styles.labelSmall, { marginTop: spacing.m }]}>LAATSTE SPROEIERWISSELS</Text>
-                  {jetLog.map((c) => {
-                    const { testNote, nextStep } = splitJetNotes(c.notes);
+                  {jetGroups.map((group) => {
+                    const first = group[0]!;
+                    const { testNote, nextStep } = splitJetNotes(first.notes);
+                    const edit = jetEdit && jetEdit.key === first.id ? jetEdit : null;
                     return (
-                      <View key={c.id} style={styles.jetLogRow}>
+                      <View key={first.id} style={styles.jetLogRow}>
                         <View style={styles.jetLogHead}>
-                          <Text style={styles.jetLogPart}>{c.part}</Text>
-                          <Text style={styles.jetLogDate}>{formatDateTime(c.changed_at)}</Text>
+                          <Text style={styles.jetLogPart}>
+                            {group.length === 1 ? first.part : `Wissel · ${group.length} onderdelen`}
+                          </Text>
+                          <Text style={styles.jetLogDate}>{formatDateTime(first.changed_at)}</Text>
                         </View>
-                        <Text style={styles.jetLogChange}>
-                          {c.old_value ?? '—'} <Text style={{ color: colors.primary }}>→</Text> {c.new_value ?? '—'}
-                        </Text>
-                        {c.result ? <Text style={styles.jetLogResult}>{c.result}</Text> : null}
+                        {group.map((c) => (
+                          <Text key={c.id} style={styles.jetLogChange}>
+                            {group.length > 1 ? `${c.part}: ` : null}
+                            {c.old_value ?? '—'} <Text style={{ color: colors.primary }}>→</Text> {c.new_value ?? '—'}
+                          </Text>
+                        ))}
+                        {first.result ? <Text style={styles.jetLogResult}>{first.result}</Text> : null}
+                        {first.run ? <Text style={styles.jetLogMeasured}>{measuredResultLine(first.run)}</Text> : null}
                         {testNote ? <Text style={styles.jetLogNote}>{testNote}</Text> : null}
                         {nextStep ? <Text style={styles.jetLogNext}>{`Volgende stap: ${nextStep}`}</Text> : null}
+
+                        {edit ? (
+                          <View style={styles.jetEditBlock}>
+                            {edit.rows.map((row) => (
+                              <View key={row.id} style={styles.jetEditRow}>
+                                <Text style={styles.jetLogPart}>{row.part}</Text>
+                                <Input
+                                  label="Oude waarde"
+                                  value={row.oldValue}
+                                  onChangeText={(t) => editJetRow(row.id, 'oldValue', t)}
+                                />
+                                <Input
+                                  label="Nieuwe waarde"
+                                  value={row.newValue}
+                                  onChangeText={(t) => editJetRow(row.id, 'newValue', t)}
+                                />
+                              </View>
+                            ))}
+                            <Input
+                              label="Testresultaat"
+                              value={edit.note}
+                              onChangeText={(t) => setJetEdit((prev) => (prev ? { ...prev, note: t } : prev))}
+                              placeholder="Wat deed hij op de testrit?"
+                              multiline
+                              style={styles.jetEditNote}
+                            />
+                            <Text style={styles.hint}>
+                              Alleen de logregel wordt aangepast; de volgende stap en een gekoppelde GPS-meting blijven
+                              staan.
+                            </Text>
+                            <View style={styles.jetLogActions}>
+                              <Pressable style={styles.sugApply} disabled={jetLogBusy} onPress={saveJetEdit}>
+                                <Text style={styles.sugApplyText}>
+                                  {jetLogBusy ? 'Opslaan…' : 'Correctie opslaan'}
+                                </Text>
+                              </Pressable>
+                              <Pressable style={styles.sugApply} onPress={() => setJetEdit(null)}>
+                                <Text style={styles.sugApplyText}>Annuleren</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ) : jetDeleteId === first.id ? (
+                          <View style={styles.jetDeleteBlock}>
+                            <Text style={styles.jetDeleteWarn}>
+                              {`Deze wissel${group.length > 1 ? ` (${group.length} regels)` : ''} verdwijnt uit dit log en uit de tuninggeschiedenis.`}
+                            </Text>
+                            <View style={styles.jetLogActions}>
+                              <Pressable
+                                style={[styles.sugApply, styles.jetLogDelete]}
+                                disabled={jetLogBusy}
+                                onPress={() => void deleteJetGroup(group)}
+                              >
+                                <Text style={[styles.sugApplyText, styles.jetLogDeleteText]}>
+                                  {jetLogBusy ? 'Verwijderen…' : 'Ja, verwijderen'}
+                                </Text>
+                              </Pressable>
+                              <Pressable style={styles.sugApply} onPress={() => setJetDeleteId(null)}>
+                                <Text style={styles.sugApplyText}>Annuleren</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={styles.jetLogActions}>
+                            <Pressable
+                              style={styles.sugApply}
+                              accessibilityLabel="Sproeierwissel corrigeren"
+                              onPress={() => startJetEdit(group)}
+                            >
+                              <Text style={styles.sugApplyText}>Corrigeren</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.sugApply, styles.jetLogDelete]}
+                              accessibilityLabel="Sproeierwissel verwijderen"
+                              onPress={() => confirmDeleteJetGroup(group)}
+                            >
+                              <Text style={[styles.sugApplyText, styles.jetLogDeleteText]}>Verwijderen</Text>
+                            </Pressable>
+                          </View>
+                        )}
                       </View>
                     );
                   })}
@@ -1477,6 +1660,20 @@ const styles = StyleSheet.create({
   jetLogResult: { color: colors.success, fontSize: 12.5, marginTop: 3 },
   jetLogNote: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 3 },
   jetLogNext: { color: colors.primary, fontSize: 12, lineHeight: 17, marginTop: 3, fontWeight: '600' },
+  jetLogMeasured: { color: colors.success, fontSize: 12.5, lineHeight: 18, marginTop: 3, fontWeight: '700' },
+  jetLogActions: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.s, flexWrap: 'wrap' },
+  jetEditBlock: {
+    marginTop: spacing.s,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSoft,
+    paddingTop: spacing.s,
+  },
+  jetEditRow: { marginTop: spacing.s },
+  jetEditNote: { minHeight: 64, textAlignVertical: 'top' },
+  jetLogDelete: { borderColor: 'rgba(239,68,68,0.45)', backgroundColor: 'rgba(239,68,68,0.10)' },
+  jetLogDeleteText: { color: colors.danger },
+  jetDeleteBlock: { marginTop: spacing.s, borderTopWidth: 1, borderTopColor: colors.borderSoft, paddingTop: spacing.s },
+  jetDeleteWarn: { color: colors.warning, fontSize: 12, lineHeight: 17 },
   circuitLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
   circuitComponent: { color: colors.textSubtle, fontSize: 11.5, marginTop: 1 },
   planRow: { flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' },

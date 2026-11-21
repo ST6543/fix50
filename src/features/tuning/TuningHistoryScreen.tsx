@@ -6,7 +6,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
 import { Badge, Button, Card, EmptyState, Loading } from '@/components/ui';
-import { isJetChangePart, splitJetNotes } from '@/lib/jet-log';
+import { isJetChangePart, measuredResultLine, splitJetNotes } from '@/lib/jet-log';
 import { SlidersIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import * as tuningService from '@/services/tuning';
@@ -70,7 +70,7 @@ export default function TuningHistoryScreen() {
           <View style={{ marginBottom: spacing.m }}>
             {jetCount > 0 ? (
               <Text style={styles.jetSummary}>
-                {`${jetCount} sproeierwissel${jetCount === 1 ? '' : 's'} gelogd vanuit de simulator — met mengselresultaat per gasstand, het testresultaat van die rit en de volgende stap.`}
+                {`${jetCount} sproeierwissel${jetCount === 1 ? '' : 's'} gelogd vanuit de simulator — met mengselresultaat per gasstand, de gekoppelde GPS-meting (top en 0–50) en de volgende stap.`}
               </Text>
             ) : null}
             <Button
@@ -111,6 +111,7 @@ export default function TuningHistoryScreen() {
               {item.result ? (
                 <Text style={styles.result}>{`${isJetChangePart(item.part) ? 'Mengsel' : 'Resultaat'}: ${item.result}`}</Text>
               ) : null}
+              {item.run ? <Text style={styles.measured}>{measuredResultLine(item.run)}</Text> : null}
               {testNote ? <Text style={styles.notes}>{testNote}</Text> : null}
               {nextStep ? (
                 <Text style={styles.nextStep}>{`Volgende stap: ${nextStep}`}</Text>
@@ -134,5 +135,6 @@ const styles = StyleSheet.create({
   meta: { color: colors.textMuted, fontSize: 12.5, marginTop: 4 },
   result: { color: colors.success, fontSize: 13.5, marginTop: spacing.xs },
   notes: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
+  measured: { color: colors.success, fontSize: 13, lineHeight: 18, marginTop: 3, fontWeight: '700' },
   nextStep: { color: colors.primary, fontSize: 13, lineHeight: 18, marginTop: 4, fontWeight: '600' },
 });

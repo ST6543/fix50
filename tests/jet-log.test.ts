@@ -4,10 +4,15 @@ import type { CarbResult } from '@/lib/afstel';
 import {
   buildJetChangeRows,
   circuitForKey,
+  composeJetNotes,
   describeJetDiff,
+  groupJetChanges,
   diffJets,
   formatJetValue,
   isJetChangePart,
+  JET_BATCH_WINDOW_MS,
+  latestPendingJetIds,
+  measuredResultLine,
   mixtureLine,
   nextStepFor,
   NO_TEST_RESULT,
@@ -120,6 +125,108 @@ describe('buildJetChangeRows', () => {
     const parts = splitJetNotes(rows[0]!.notes);
     expect(parts.testNote).toBe(NO_TEST_RESULT);
     expect(parts.nextStep).toBe(rows[0]!.nextStep);
+  });
+});
+
+describe('latestPendingJetIds', () => {
+  const row = (id: string, part: string, changed_at: string, run_id: string | null = null) => ({
+    id,
+    part,
+    changed_at,
+    run_id,
+  });
+
+  it('kiest alleen de nieuwste wissel die nog wacht', () => {
+    const ids = latestPendingJetIds([
+      row('oud', 'Hoofdsproeier', '2026-11-19T10:00:00.000Z'),
+      row('nieuw-a', 'Hoofdsproeier', '2026-11-19T10:05:00.000Z'),
+      row('nieuw-b', 'Naaldclip', '2026-11-19T10:05:00.120Z'),
+    ]);
+    expect(ids).toEqual(['nieuw-a', 'nieuw-b']);
+  });
+
+  it('slaat regels met een meting en niet-sproeierregels over', () => {
+    const ids = latestPendingJetIds([
+      row('gemeten', 'Hoofdsproeier', '2026-11-19T10:05:00.000Z', 'run-1'),
+      row('rollen', 'Rollen', '2026-11-19T10:05:00.100Z'),
+      row('sproeier', 'Stationairsproeier', '2026-11-19T10:04:59.900Z'),
+    ]);
+    expect(ids).toEqual(['sproeier']);
+  });
+
+  it('geeft niets terug als er niets wacht of de datum onleesbaar is', () => {
+    expect(latestPendingJetIds([])).toEqual([]);
+    expect(latestPendingJetIds([row('x', 'Hoofdsproeier', 'geen-datum')])).toEqual([]);
+  });
+
+  it('houdt een langere reeks van dezelfde wissel bij elkaar binnen het venster', () => {
+    const late = '2026-11-19T10:05:00.000Z';
+    const early = new Date(Date.parse(late) - JET_BATCH_WINDOW_MS).toISOString();
+    const buiten = new Date(Date.parse(late) - JET_BATCH_WINDOW_MS - 1000).toISOString();
+    expect(latestPendingJetIds([row('a', 'Hoofdsproeier', late), row('b', 'Naaldclip', early)])).toEqual(['a', 'b']);
+    expect(latestPendingJetIds([row('a', 'Hoofdsproeier', late), row('b', 'Naaldclip', buiten)])).toEqual(['a']);
+  });
+});
+
+describe('groupJetChanges', () => {
+  const row = (id: string, part: string, changed_at: string) => ({ id, part, changed_at, old_value: null, new_value: null });
+
+  it('groepeert de regels van één wissel en slaat andere onderdelen over', () => {
+    const groups = groupJetChanges([
+      row('b', 'Naaldclip', '2026-11-19T10:05:00.000Z'),
+      row('a', 'Hoofdsproeier', '2026-11-19T10:05:00.100Z'),
+      row('rollen', 'Rollen', '2026-11-19T10:05:00.000Z'),
+      row('oud', 'Hoofdsproeier', '2026-11-19T10:00:00.000Z'),
+    ]);
+    expect(groups.map((g) => g.map((r) => r.id))).toEqual([['a', 'b'], ['oud']]);
+  });
+
+  it('houdt wissels buiten het venster apart', () => {
+    const late = '2026-11-19T10:05:00.000Z';
+    const netBinnen = new Date(Date.parse(late) - JET_BATCH_WINDOW_MS).toISOString();
+    const netBuiten = new Date(Date.parse(late) - JET_BATCH_WINDOW_MS - 1).toISOString();
+    expect(groupJetChanges([row('a', 'Hoofdsproeier', late), row('b', 'Naaldclip', netBinnen)])).toHaveLength(1);
+    expect(groupJetChanges([row('a', 'Hoofdsproeier', late), row('b', 'Naaldclip', netBuiten)])).toHaveLength(2);
+  });
+
+  it('geeft een lege lijst als er niets te groeperen is', () => {
+    expect(groupJetChanges([])).toEqual([]);
+  });
+});
+
+describe('composeJetNotes', () => {
+  it('zet een gecorrigeerd testresultaat terug met de volgende stap', () => {
+    expect(composeJetNotes('bougie bruin', 'Sproeier één stap groter')).toBe(
+      'bougie bruin · Volgende stap: Sproeier één stap groter',
+    );
+  });
+
+  it('valt terug op de eerlijke melding zonder testresultaat', () => {
+    expect(composeJetNotes('', 'Sproeier één stap groter')).toBe(
+      `${NO_TEST_RESULT} · Volgende stap: Sproeier één stap groter`,
+    );
+  });
+
+  it('levert null bij een lege correctie en blijft splitsbaar', () => {
+    expect(composeJetNotes('   ', null)).toBeNull();
+    expect(splitJetNotes(composeJetNotes('top 70', null))).toEqual({ testNote: 'top 70', nextStep: null });
+  });
+});
+
+describe('measuredResultLine', () => {
+  it('toont top en 0–50 met Nederlandse decimalen', () => {
+    expect(
+      measuredResultLine({ max_speed_kmh: 72.4, t0_50_s: 4.321, gps_quality: 'goed' }),
+    ).toBe('Gemeten: top 72,4 km/u · 0–50 4,32 s · GPS goed');
+  });
+
+  it('zegt eerlijk wat er niet gemeten is', () => {
+    expect(measuredResultLine({ max_speed_kmh: 68, t0_50_s: null, gps_quality: 'matig' })).toBe(
+      'Gemeten: top 68,0 km/u · 0–50 niet gemeten · GPS matig',
+    );
+    expect(measuredResultLine({ max_speed_kmh: null, t0_50_s: null, gps_quality: 'slecht' })).toBe(
+      'Gemeten: top niet gemeten · 0–50 niet gemeten · GPS slecht',
+    );
   });
 });
 

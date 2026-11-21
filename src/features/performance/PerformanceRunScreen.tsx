@@ -11,7 +11,7 @@ import { AlertCircleIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import { computeMetrics, gpsQuality, isStationaryEnough, smoothSpeed, type GpsSample } from './gps';
 import * as perfService from '@/services/performance';
-import { getActiveSetup } from '@/services/tuning';
+import { attachRunToLatestJetChange, getActiveSetup } from '@/services/tuning';
 import type { TuningSetup, UUID } from '@/types';
 import { performanceRunSchema } from '@/lib/validation';
 import { colors, fonts, spacing, typography } from '@/theme';
@@ -203,6 +203,11 @@ export default function PerformanceRunScreen() {
           started_at: new Date(Date.now() - metrics.durationS * 1000).toISOString(),
         },
       });
+      // Eerstvolgende meting = testresultaat van de nieuwste gelogde sproeierwissel.
+      // Mislukt dit, dan blijft de meting gewoon bestaan; alleen de koppeling ontbreekt.
+      if (activeScooter?.id) {
+        await attachRunToLatestJetChange({ scooterId: activeScooter.id, runId: saved.id }).catch(() => 0);
+      }
       watchRef.current?.remove();
       navigation.replace('PerformanceResult', { runId: saved.id });
     } catch (err) {

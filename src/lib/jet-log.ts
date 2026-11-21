@@ -33,8 +33,64 @@ export interface JetChangeRow {
 
 export const NO_TEST_RESULT = 'Nog geen testresultaat — na de testrit bougiekleur of topsnelheid invullen.';
 
+/** Rijen van dezelfde wissel worden kort na elkaar weggeschreven; dit venster houdt ze bij elkaar. */
+export const JET_BATCH_WINDOW_MS = 5000;
+
+/**
+ * Welke logregels wachten op de eerstvolgende GPS-test?
+ * Alleen de nieuwste wissel telt: is er daarna alweer een nieuwe wissel
+ * gelogd, dan hoort de meting bij die laatste stand, niet bij de oude.
+ */
+export function latestPendingJetIds(
+  changes: { id: string; part: string; changed_at: string; run_id?: string | null }[],
+): string[] {
+  const pending = changes.filter((c) => isJetChangePart(c.part) && !c.run_id);
+  const times = pending
+    .map((c) => Date.parse(c.changed_at))
+    .filter((t) => Number.isFinite(t));
+  if (times.length === 0) return [];
+  const newest = Math.max(...times);
+  return pending
+    .filter((c) => {
+      const t = Date.parse(c.changed_at);
+      return Number.isFinite(t) && newest - t <= JET_BATCH_WINDOW_MS;
+    })
+    .map((c) => c.id);
+}
+
 /** Marker waarmee de volgende stap in de notitie wordt vastgelegd. */
 export const NEXT_STEP_PREFIX = 'Volgende stap: ';
+
+export interface JetChangeLike {
+  id: string;
+  part: string;
+  changed_at: string;
+  run_id?: string | null;
+}
+
+/**
+ * Groepeert logregels tot wissels. Regels van dezelfde wissel zijn kort na
+ * elkaar weggeschreven en horen bij elkaar; nieuwste wissel eerst.
+ * Alleen sproeierregels doen mee, net als in de rest van het logblok.
+ */
+export function groupJetChanges<T extends JetChangeLike>(changes: T[]): T[][] {
+  const rows = changes
+    .filter((c) => isJetChangePart(c.part))
+    .map((c) => ({ row: c, at: Date.parse(c.changed_at) }))
+    .sort((a, b) => (Number.isFinite(b.at) ? b.at : 0) - (Number.isFinite(a.at) ? a.at : 0));
+
+  const groups: T[][] = [];
+  let anchor: number | null = null;
+  for (const { row, at } of rows) {
+    if (anchor === null || !Number.isFinite(at) || anchor - at > JET_BATCH_WINDOW_MS) {
+      groups.push([row]);
+      anchor = Number.isFinite(at) ? at : null;
+      continue;
+    }
+    groups[groups.length - 1]!.push(row);
+  }
+  return groups;
+}
 
 /** Welk circuit hoort bij een gewijzigd onderdeel? */
 export function circuitForKey(key: keyof JetConfig): CircuitId {
@@ -146,6 +202,39 @@ export function splitJetNotes(notes: string | null | undefined): { testNote: str
     testNote: testNote.length > 0 ? testNote : null,
     nextStep: nextStep.length > 0 ? nextStep : null,
   };
+}
+
+/**
+ * Zet een gecorrigeerd testresultaat weer terug in de notitievorm van de log,
+ * met de bijbehorende volgende stap erachter.
+ */
+export function composeJetNotes(testNote?: string | null, nextStep?: string | null): string | null {
+  const note = (testNote ?? '').trim();
+  const step = (nextStep ?? '').trim();
+  if (!note && !step) return null;
+  const base = note || NO_TEST_RESULT;
+  return step ? `${base} · ${NEXT_STEP_PREFIX}${step}` : base;
+}
+
+export interface JetRunMeasure {
+  max_speed_kmh: number | null;
+  t0_50_s: number | null;
+  gps_quality: 'goed' | 'matig' | 'slecht';
+}
+
+function fmtDecimal(value: number, digits: number): string {
+  return value.toFixed(digits).replace('.', ',');
+}
+
+/**
+ * Het gemeten resultaat van de gekoppelde GPS-test: top en 0–50, met de
+ * GPS-kwaliteit erbij. Ontbrekende waarden worden eerlijk benoemd, niet
+ * weggelaten of geschat.
+ */
+export function measuredResultLine(run: JetRunMeasure): string {
+  const top = run.max_speed_kmh === null ? 'top niet gemeten' : `top ${fmtDecimal(run.max_speed_kmh, 1)} km/u`;
+  const accel = run.t0_50_s === null ? '0–50 niet gemeten' : `0–50 ${fmtDecimal(run.t0_50_s, 2)} s`;
+  return `Gemeten: ${top} · ${accel} · GPS ${run.gps_quality}`;
 }
 
 /** Korte samenvatting voor de knop/het logblok in de simulator. */

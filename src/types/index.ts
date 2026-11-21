@@ -194,10 +194,21 @@ export interface TuningSetup {
   updated_at: string;
 }
 
+/** Meetresultaat van de GPS-test die aan een wijziging hangt. */
+export interface TuningChangeRun {
+  id: UUID;
+  max_speed_kmh: number | null;
+  t0_50_s: number | null;
+  gps_quality: 'goed' | 'matig' | 'slecht';
+  started_at: string;
+}
+
 export interface TuningChange {
   id: UUID;
   scooter_id: UUID;
   setup_id: UUID | null;
+  /** GPS-test als testresultaat; null = wacht nog op de eerstvolgende meting. */
+  run_id: UUID | null;
   changed_at: string;
   km_at_change: number | null;
   part: string;
@@ -206,6 +217,8 @@ export interface TuningChange {
   result: string | null;
   notes: string | null;
   created_at: string;
+  /** Ingeladen met de wijziging (alleen bij listChanges). */
+  run?: TuningChangeRun | null;
 }
 
 export interface PerformancePoint {

@@ -2,6 +2,7 @@
 import { query } from './api';
 import { supabase } from '@/lib/supabase';
 import type { TuningChange, TuningSetup, UUID } from '@/types';
+import { JET_PART_LABELS, latestPendingJetIds } from '@/lib/jet-log';
 
 export async function listSetups(scooterId: UUID): Promise<TuningSetup[]> {
   return query<TuningSetup[]>(
@@ -55,11 +56,56 @@ export async function listChanges(scooterId: UUID, limit = 100): Promise<TuningC
     () =>
       supabase
         .from('tuning_changes')
-        .select('*')
+        .select('*, run:performance_runs(id, max_speed_kmh, t0_50_s, gps_quality, started_at)')
         .eq('scooter_id', scooterId)
         .order('changed_at', { ascending: false })
         .limit(limit),
   );
+}
+
+/**
+ * Koppelt een net opgeslagen GPS-test aan de nieuwste sproeierwissel die nog
+ * op een meting wacht. Zo hoeft de gebruiker het resultaat niet over te
+ * typen: top en 0–50 komen uit de meting zelf.
+ *
+ * Geeft het aantal gekoppelde regels terug (0 = niets te koppelen).
+ */
+export async function attachRunToLatestJetChange(args: {
+  scooterId: UUID;
+  runId: UUID;
+}): Promise<number> {
+  const pending = await query<Pick<TuningChange, 'id' | 'part' | 'changed_at' | 'run_id'>[]>(
+    () =>
+      supabase
+        .from('tuning_changes')
+        .select('id, part, changed_at, run_id')
+        .eq('scooter_id', args.scooterId)
+        .is('run_id', null)
+        .in('part', [...JET_PART_LABELS])
+        .order('changed_at', { ascending: false })
+        .limit(20),
+  );
+  const ids = latestPendingJetIds(pending);
+  if (ids.length === 0) return 0;
+  await query<void>(() => supabase.from('tuning_changes').update({ run_id: args.runId }).in('id', ids));
+  return ids.length;
+}
+
+/**
+ * Corrigeert een verkeerd gelogde wijziging: alleen de tekst van de regel,
+ * zodat een gekoppelde GPS-meting en de rest van de geschiedenis blijven staan.
+ */
+export async function updateChange(
+  id: UUID,
+  patch: Partial<Pick<TuningChange, 'old_value' | 'new_value' | 'notes' | 'result'>>,
+): Promise<void> {
+  await query<void>(() => supabase.from('tuning_changes').update(patch).eq('id', id));
+}
+
+/** Verwijdert een foutief gelogde wissel in één keer (alle regels ervan). */
+export async function deleteChanges(ids: UUID[]): Promise<void> {
+  if (ids.length === 0) return;
+  await query<void>(() => supabase.from('tuning_changes').delete().in('id', ids));
 }
 
 export async function addChange(args: {
