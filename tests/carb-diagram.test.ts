@@ -5,6 +5,7 @@ import {
   CARB_BAND_LABELS,
   CARB_PARTS,
   circuitAt,
+  circuitForPart,
   clampThrottle,
   IDLE_MAX_PCT,
   MID_MAX_PCT,
@@ -36,6 +37,25 @@ describe('circuitAt', () => {
   it('klemt waarden buiten het bereik', () => {
     expect(circuitAt(-5)).toBe('idle');
     expect(circuitAt(180)).toBe('full');
+  });
+});
+
+describe('circuitForPart', () => {
+  it('wijst elk onderdeel naar het gasbereik waar het het mengsel bepaalt', () => {
+    expect(circuitForPart('stationairsproeier')).toBe('idle');
+    expect(circuitForPart('luchtschroef')).toBe('idle');
+    expect(circuitForPart('naald')).toBe('mid');
+    expect(circuitForPart('naaldsproeier')).toBe('mid');
+    expect(circuitForPart('hoofdsproeier')).toBe('full');
+  });
+
+  it('geeft geen circuit voor onderdelen die altijd meetellen', () => {
+    for (const id of ALTIJD) expect(circuitForPart(id)).toBeNull();
+    expect(circuitForPart('choke')).toBeNull();
+  });
+
+  it('dekt alle onderdelen', () => {
+    expect(CARB_PARTS.every((p) => circuitForPart(p.id) !== undefined)).toBe(true);
   });
 });
 

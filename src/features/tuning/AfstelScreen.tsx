@@ -1,9 +1,9 @@
 /** Afstelhulp — startafstelling carburateur en CVT-richting, naar de klasieke afstelhulp-modellen. */
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import type { AppNav } from '@/navigation/types';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { AppNav, RootStackParamList } from '@/navigation/types';
 import Svg, { Line, Polyline, Rect } from 'react-native-svg';
 
 import { Badge, Button, Card, Chip, ChipRow, Input, Slider } from '@/components/ui';
@@ -182,6 +182,42 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const { setup, activeScooter } = useScooters();
   const [tab, setTab] = useState<'carb' | 'cvt' | 'gear'>('carb');
   const tabSnapshot = tab as 'carb' | 'cvt' | 'gear';
+
+  // ── Doorklik vanuit het carburateurdiagram ──
+  // Het gekozen onderdeel brengt je naar het gasbereik waar het het mengsel bepaalt.
+  const route = useRoute<RouteProp<RootStackParamList, 'Afstel'>>();
+  const focusCircuit = route.params?.circuit ?? null;
+  const focusPartLabel = route.params?.partLabel ?? null;
+  const scrollRef = useRef<ScrollView>(null);
+  const circuitRefs = useRef<Record<string, View | null>>({});
+
+  useEffect(() => {
+    if (!focusCircuit) return;
+    setTab('carb');
+    // Na de eerste layout het gemarkeerde circuit in beeld brengen. Een paar
+    // pogingen, want tijdens de schermovergang is de inhoud soms nog niet hoog
+    // genoeg om te kunnen scrollen.
+    const bringIntoView = (smooth: boolean) => {
+      const node = circuitRefs.current[focusCircuit] as unknown as
+        | (View & { scrollIntoView?: (opts?: { block?: 'center'; behavior?: 'smooth' | 'auto' }) => void })
+        | null;
+      // Web: de ref is het DOM-element, dus scrollIntoView is het betrouwbaarst.
+      if (Platform.OS === 'web' && typeof node?.scrollIntoView === 'function') {
+        node.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' });
+        return;
+      }
+      try {
+        node?.measure?.((_x, _y, _w, _h, _px, pageY) => {
+          if (typeof pageY !== 'number' || !Number.isFinite(pageY)) return;
+          scrollRef.current?.scrollTo({ y: Math.max(0, pageY - 140), animated: smooth });
+        });
+      } catch {
+        // Meten kan mislukken zolang het scherm nog niet is uitgelijnd; dan blijft de kaart gewoon staan.
+      }
+    };
+    const timers = [400, 1100, 1800].map((delay, i) => setTimeout(() => bringIntoView(i === 0), delay));
+    return () => timers.forEach(clearTimeout);
+  }, [focusCircuit]);
 
   // ── Carburateur-state (pre-filled vanuit de scooter-setup) ──
   const [cc, setCc] = useState<number>(() => (setup?.cilinderinhoud_cc ? closeOption<number>(setup.cilinderinhoud_cc, CC_OPTIONS) : 70));
@@ -669,7 +705,7 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
 
   return (
     <SafeAreaView style={styles.safe} edges={embedded ? [] : ['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         {/* Segment-switch */}
         <Card style={styles.tabsCard}>
           <View style={styles.tabsRow}>
@@ -919,17 +955,29 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 <Text style={styles.verdictSpeed}>richtlijn, geen meting</Text>
               </View>
               <Text style={styles.hint}>{jetSim.summary}</Text>
-              {jetSim.circuits.map((c) => (
-                <View key={c.id} style={styles.circuitCard}>
-                  <View style={styles.circuitHead}>
-                    <Text style={styles.circuitLabel}>{c.label}</Text>
-                    <Badge label={c.mixture} tone={mixtureTone[c.mixture]} />
+              {jetSim.circuits.map((c) => {
+                const focused = focusCircuit === c.id;
+                return (
+                  <View
+                    key={c.id}
+                    ref={(r) => {
+                      circuitRefs.current[c.id] = r;
+                    }}
+                    style={[styles.circuitCard, focused && styles.circuitCardFocus]}
+                  >
+                    <View style={styles.circuitHead}>
+                      <Text style={styles.circuitLabel}>{c.label}</Text>
+                      <Badge label={c.mixture} tone={mixtureTone[c.mixture]} />
+                    </View>
+                    <Text style={styles.circuitComponent}>{c.component}</Text>
+                    {focused && focusPartLabel ? (
+                      <Text style={styles.circuitFocusNote}>{`Vanuit het diagram: ${focusPartLabel}.`}</Text>
+                    ) : null}
+                    {c.risk ? <Text style={styles.blockInfoPit}>{c.risk}</Text> : null}
+                    <Text style={styles.nextStepText}>{c.nextTest}</Text>
                   </View>
-                  <Text style={styles.circuitComponent}>{c.component}</Text>
-                  {c.risk ? <Text style={styles.blockInfoPit}>{c.risk}</Text> : null}
-                  <Text style={styles.nextStepText}>{c.nextTest}</Text>
-                </View>
-              ))}
+                );
+              })}
               {jetSim.warnings.map((w) => (
                 <Text key={w} style={styles.blockInfoPit}>{`⚠ ${w}`}</Text>
               ))}
@@ -1644,6 +1692,8 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSoft,
     padding: spacing.s,
   },
+  circuitCardFocus: { borderColor: colors.primary, backgroundColor: colors.primarySubtle },
+  circuitFocusNote: { color: colors.primary, fontSize: 12, fontWeight: '700', marginTop: 3 },
   circuitHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.s },
   jetLogRow: {
     marginTop: spacing.s,

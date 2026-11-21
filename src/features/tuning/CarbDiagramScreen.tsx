@@ -7,8 +7,9 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 
-import { Badge, Card, Chip, ChipRow, SectionTitle, Slider } from '@/components/ui';
+import { Badge, Button, Card, Chip, ChipRow, SectionTitle, Slider } from '@/components/ui';
 import CarbDiagram from '@/components/CarbDiagram';
 import {
   activePartsAt,
@@ -16,9 +17,12 @@ import {
   CARB_BAND_LABELS,
   CARB_PARTS,
   CARB_PARTS_BY_ID,
+  circuitForPart,
   throttleSummary,
   type CarbPartId,
 } from '@/lib/carb-diagram';
+import { throttleBandLabel } from '@/lib/throttle-bands';
+import type { AppNav } from '@/navigation/types';
 import { colors, fonts, radii, spacing } from '@/theme';
 
 const QUICK: { label: string; value: number }[] = [
@@ -29,8 +33,11 @@ const QUICK: { label: string; value: number }[] = [
 ];
 
 export default function CarbDiagramScreen({ embedded = false }: { embedded?: boolean }) {
+  const navigation = useNavigation<AppNav>();
   const [throttle, setThrottle] = useState(0);
   const [selected, setSelected] = useState<CarbPartId>('stationairsproeier');
+  // Naar welk circuit van de sproeier-simulator dit onderdeel hoort (null = altijd actief).
+  const circuit = circuitForPart(selected);
 
   const band = useMemo(() => bandAt(throttle), [throttle]);
   const activeIds = useMemo(() => activePartsAt(throttle), [throttle]);
@@ -114,6 +121,24 @@ export default function CarbDiagramScreen({ embedded = false }: { embedded?: boo
           <View style={styles.divider} />
           <Text style={styles.labelSmall}>AFSTELLEN OF VERVANGEN</Text>
           <Text style={styles.body}>{part.adjust}</Text>
+
+          {circuit ? (
+            <>
+              <View style={styles.divider} />
+              <Text style={styles.labelSmall}>HET BIJBEHORENDE GASBEREIK</Text>
+              <Text style={styles.body}>{`${part.label} bepaalt het mengsel vooral bij ${throttleBandLabel(circuit)}.`}</Text>
+              <Button
+                label={`Naar de sproeier-simulator (${throttleBandLabel(circuit)})`}
+                variant="secondary"
+                onPress={() => navigation.navigate('Afstel', { circuit, partLabel: part.label })}
+                style={{ marginTop: spacing.m }}
+              />
+            </>
+          ) : (
+            <Text style={styles.hint}>
+              Dit onderdeel telt bij elke gasstand mee en hoort dus bij geen enkel gasbereik in de simulator.
+            </Text>
+          )}
         </Card>
 
         <SectionTitle>Alle onderdelen</SectionTitle>

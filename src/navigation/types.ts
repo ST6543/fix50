@@ -16,7 +16,8 @@ export type RootStackParamList = {
   MaintenanceHistory: undefined;
   AddMaintenance: undefined;
   SetupDetail: { setupId?: string } | undefined;
-  Afstel: undefined;
+  /** `circuit` komt van het carburateurdiagram: open de simulator op dat gasbereik. */
+  Afstel: { circuit?: 'idle' | 'mid' | 'full'; partLabel?: string } | undefined;
   TuningDashboard: undefined;
   TuningSimulator: undefined;
   CarbDiagram: undefined;

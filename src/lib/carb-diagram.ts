@@ -261,6 +261,19 @@ export function activePartsAt(pct: number): CarbPartId[] {
   return CARB_PARTS.filter((p) => p.band === 'altijd' || p.band === band).map((p) => p.id);
 }
 
+/**
+ * Het circuit in de sproeier-simulator waar dit onderdeel het mengsel bepaalt.
+ * Onderdelen die altijd meetellen (lucht, vlotter, huis, choke) hebben er geen:
+ * die horen bij elke gasstand en dus bij geen enkele band.
+ */
+export function circuitForPart(id: CarbPartId): CarbCircuitId | null {
+  const band = CARB_PARTS_BY_ID[id].band;
+  if (band === 'stationair') return 'idle';
+  if (band === 'halfgas') return 'mid';
+  if (band === 'volgas') return 'full';
+  return null;
+}
+
 export function isPartActiveAt(part: CarbPart, pct: number): boolean {
   return activePartsAt(pct).includes(part.id);
 }
