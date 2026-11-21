@@ -3,9 +3,9 @@
  * Ontwerpprincipes: veel witruimte, kleur alleen semantisch (oranje accent),
  * dunne gridlines zonder as-frame, motion met betekenis (gegroeide balken, fade-in).
  */
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Line, Path, Polygon, Polyline, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, LinearGradient, Line, Path, Polygon, Polyline, Rect, Stop } from 'react-native-svg';
 
 import { FadeInView, GrowInView } from '@/components/motion';
 import { colors, spacing } from '@/theme';
@@ -61,10 +61,16 @@ export function TrendChart({
   height?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  // Breed canvas dat met preserveAspectRatio="none" de volle kaartbreedte vult;
+  // non-scaling-stroke houdt de lijnen even dik op elk venster.
+  const [boxWidth, setBoxWidth] = useState(0);
   if (data.length < 2) return null;
 
-  const W = 320;
+  const W = 1000;
   const PAD = { top: 12, bottom: 10, left: 10, right: 10 };
+  // Markeerpunten zijn gevulde vormen en schalen dus mee met de viewBox; deze
+  // factor maakt ze horizontaal weer rond zodra de werkelijke breedte bekend is.
+  const markerScaleX = boxWidth > 0 ? W / boxWidth : 1;
   const inner = height - PAD.top - PAD.bottom;
 
   const values = data.map((d) => d.value);
@@ -82,31 +88,63 @@ export function TrendChart({
   const linePath = coords.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
 
   return (
-    <FadeInView style={[styles.chartWrap, style]}>
-      <Svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} preserveAspectRatio="none">
-        {[0.33, 0.66].map((f) => (
+    <View
+      style={[styles.chartWrap, style]}
+      onLayout={(e) => setBoxWidth(e.nativeEvent?.layout.width ?? 0)}
+    >
+      <FadeInView style={styles.chartWrap}>
+        <Svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} preserveAspectRatio="none">
+          {[0.33, 0.66].map((f) => (
+            <Line
+              key={f}
+              x1={PAD.left}
+              x2={W - PAD.right}
+              y1={PAD.top + f * inner}
+              y2={PAD.top + f * inner}
+              stroke={colors.border}
+              strokeWidth={1}
+              strokeDasharray="3 6"
+              vectorEffect="non-scaling-stroke"
+            />
+          ))}
           <Line
-            key={f}
             x1={PAD.left}
             x2={W - PAD.right}
-            y1={PAD.top + f * inner}
-            y2={PAD.top + f * inner}
+            y1={height - PAD.bottom}
+            y2={height - PAD.bottom}
             stroke={colors.border}
             strokeWidth={1}
-            strokeDasharray="3 6"
+            vectorEffect="non-scaling-stroke"
           />
-        ))}
-        <Line x1={PAD.left} x2={W - PAD.right} y1={height - PAD.bottom} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} />
-        <Path d={linePath} fill="none" stroke={colors.primary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-        {coords.map(([x, y], i) => (
-          <Circle key={i} cx={x} cy={y} r={i === coords.length - 1 ? 4 : 2.5} fill={i === coords.length - 1 ? colors.primary : colors.primaryDim} />
-        ))}
-      </Svg>
-      <View style={styles.axisRow}>
-        <Text style={styles.axisLabel} numberOfLines={1}>{data[0]!.label}</Text>
-        <Text style={styles.axisLabel} numberOfLines={1}>{data[data.length - 1]!.label}</Text>
-      </View>
-    </FadeInView>
+          <Path
+            d={linePath}
+            fill="none"
+            stroke={colors.primary}
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+          {coords.map(([x, y], i) => {
+            const r = i === coords.length - 1 ? 4 : 2.5;
+            return (
+              <Ellipse
+                key={i}
+                cx={x}
+                cy={y}
+                rx={r * markerScaleX}
+                ry={r}
+                fill={i === coords.length - 1 ? colors.primary : colors.primaryDim}
+              />
+            );
+          })}
+        </Svg>
+        <View style={styles.axisRow}>
+          <Text style={styles.axisLabel} numberOfLines={1}>{data[0]!.label}</Text>
+          <Text style={styles.axisLabel} numberOfLines={1}>{data[data.length - 1]!.label}</Text>
+        </View>
+      </FadeInView>
+    </View>
   );
 }
 
@@ -122,7 +160,9 @@ export function SpeedChart({
   style?: StyleProp<ViewStyle>;
 }) {
   const gradientId = useRef(`speed-${Math.random().toString(36).slice(2, 8)}`).current;
-  const W = 320;
+  // Zelfde aanpak als de simulatorgrafiek: breed canvas plus non-scaling-stroke,
+  // zodat de lijndikte niet vervormt wanneer de kaart breder wordt.
+  const W = 1000;
   const PAD = { top: 10, bottom: 8, left: 6, right: 6 };
   const inner = height - PAD.top - PAD.bottom;
 
@@ -165,12 +205,29 @@ export function SpeedChart({
             stroke={colors.border}
             strokeWidth={1}
             strokeDasharray="3 6"
+            vectorEffect="non-scaling-stroke"
           />
         ))}
-        <Line x1={PAD.left} x2={W - PAD.right} y1={height - PAD.bottom} y2={height - PAD.bottom} stroke={colors.border} strokeWidth={1} />
+        <Line
+          x1={PAD.left}
+          x2={W - PAD.right}
+          y1={height - PAD.bottom}
+          y2={height - PAD.bottom}
+          stroke={colors.border}
+          strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
+        />
 
         {areaPath ? <Path d={areaPath} fill={`url(#${gradientId})`} /> : null}
-        <Path d={linePath} fill="none" stroke={colors.primary} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+        <Path
+          d={linePath}
+          fill="none"
+          stroke={colors.primary}
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
       </Svg>
 
       <View style={styles.axisRow}>
