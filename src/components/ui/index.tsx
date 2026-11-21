@@ -2,6 +2,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +10,7 @@ import {
   View,
   type StyleProp,
   type TextInputProps,
+  type ViewProps,
   type ViewStyle,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
@@ -360,6 +362,7 @@ export function Slider({
   const [trackX, setTrackX] = useState(0);
   const [trackW, setTrackW] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [focused, setFocused] = useState(false);
 
   const span = max - min || 1;
   const ratio = Math.max(0, Math.min(1, (value - min) / span));
@@ -393,6 +396,55 @@ export function Slider({
 
   const display = format ? format(value) : `${value.toFixed(decimals).replace('.', ',')}${unit ? ` ${unit}` : ''}`;
 
+  /**
+   * Toetsenbordbediening (web): pijltjes één stap, PageUp/PageDown tien stappen,
+   * Home/End naar de uiteinden. Dezelfde snap-functie als slepen, dus de waarde
+   * blijft exact op het raster.
+   */
+  const onKeyDown = (e: { key?: string; preventDefault?: () => void }) => {
+    if (disabled) return;
+    const big = step * 10;
+    let next: number | null = null;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowUp':
+        next = value + step;
+        break;
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        next = value - step;
+        break;
+      case 'PageUp':
+        next = value + big;
+        break;
+      case 'PageDown':
+        next = value - big;
+        break;
+      case 'Home':
+        next = min;
+        break;
+      case 'End':
+        next = max;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault?.();
+    onChange(snap(next));
+  };
+
+  // Web-only props: toetsenbord, focus en tabvolgorde. Native kent dit niet; de
+  // schermlezer gebruikt daar accessibilityActions hieronder.
+  const webProps =
+    Platform.OS === 'web'
+      ? ({
+          onKeyDown,
+          onFocus: () => setFocused(true),
+          onBlur: () => setFocused(false),
+          tabIndex: disabled ? -1 : 0,
+        } as unknown as ViewProps)
+      : ({} as ViewProps);
+
   return (
     <View style={[styles.slider, disabled && { opacity: 0.5 }]}>
       <View style={styles.sliderHead}>
@@ -406,6 +458,13 @@ export function Slider({
         accessibilityRole="adjustable"
         accessibilityLabel={label}
         accessibilityValue={{ min, max, now: value }}
+        accessibilityState={{ disabled }}
+        /* Echte slider-semantiek op web: RNW leest aria-* direct, accessibilityValue niet. */
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-valuetext={display}
+        {...webProps}
         accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
         onAccessibilityAction={(e) => {
           if (e.nativeEvent.actionName === 'increment') onChange(snap(value + step));
@@ -425,19 +484,36 @@ export function Slider({
         onResponderMove={onGesture}
         onResponderRelease={() => setDragging(false)}
         onResponderTerminate={() => setDragging(false)}
-        style={styles.sliderTrackWrap}
+        style={[styles.sliderTrackWrap, focused && styles.sliderTrackWrapFocused]}
       >
+        {/*
+          De baan, het streepje en de knop staan op procenten, niet op de gemeten
+          breedte: die meting komt op web pas bij de eerste tik binnen, waardoor
+          de knop na een toetsenbordstap op zijn oude plek bleef staan.
+        */}
         <View style={styles.sliderRail} />
-        <View style={[styles.sliderRailFill, { width: ratio * trackW }]} />
+        <View style={[styles.sliderRailFill, { width: `${ratio * 100}%` as `${number}%` }]} />
         {targetRatio !== null ? (
           <View
             pointerEvents="none"
-            style={[styles.sliderTarget, { left: targetRatio * trackW - 1 }, Math.abs(targetRatio - ratio) < 0.002 && { opacity: 0 }]}
+            style={[
+              styles.sliderTarget,
+              { left: `${targetRatio * 100}%` as `${number}%`, marginLeft: -1 },
+              Math.abs(targetRatio - ratio) < 0.002 && { opacity: 0 },
+            ]}
           />
         ) : null}
         <View
           pointerEvents="none"
-          style={[styles.sliderThumb, dragging && styles.sliderThumbActive, { left: Math.max(0, ratio * trackW - 11) }]}
+          style={[
+            styles.sliderThumb,
+            dragging && styles.sliderThumbActive,
+            {
+              left: `${ratio * 100}%` as `${number}%`,
+              // Aan de uiteinden valt de knop binnen de baan, net als voorheen.
+              marginLeft: ratio === 0 ? 0 : ratio === 1 ? -22 : -11,
+            },
+          ]}
         />
       </View>
       <View style={styles.sliderScale}>
@@ -722,6 +798,13 @@ const styles = StyleSheet.create({
   },
   sliderValue: { color: colors.primary, fontFamily: fonts.display, fontSize: 14, fontWeight: '700' },
   sliderTrackWrap: { height: 34, justifyContent: 'center' },
+  sliderTrackWrapFocused: {
+    outlineStyle: 'solid',
+    outlineWidth: 2,
+    outlineColor: colors.primary,
+    outlineOffset: 2,
+    borderRadius: radii.s,
+  },
   sliderRail: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceHigh },
   sliderRailFill: { position: 'absolute', height: 6, borderRadius: 3, backgroundColor: colors.primary },
   sliderTarget: { position: 'absolute', width: 2, height: 18, borderRadius: 1, backgroundColor: colors.textSubtle },
