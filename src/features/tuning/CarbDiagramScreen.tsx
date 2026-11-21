@@ -40,6 +40,15 @@ export default function CarbDiagramScreen({ embedded = false }: { embedded?: boo
   return (
     <SafeAreaView style={styles.safe} edges={embedded ? [] : ['top']}>
       <ScrollView contentContainerStyle={styles.content}>
+        {/* Live-regio: kondigt de gekozen onderdeel aan, ook als je het in het diagram aantikt. */}
+        <Text
+          style={styles.srOnly}
+          accessibilityLiveRegion="polite"
+          aria-live="polite"
+        >
+          {`Gekozen: ${CARB_PARTS.indexOf(part) + 1}. ${part.label}, ${CARB_BAND_LABELS[part.band]}`}
+        </Text>
+
         <Card>
           <Text style={styles.eyebrow}>DIAGRAM · GASSTAND {Math.round(throttle)}%</Text>
           <Text style={styles.title}>{band.component}</Text>
@@ -116,7 +125,8 @@ export default function CarbDiagramScreen({ embedded = false }: { embedded?: boo
               <Pressable
                 key={p.id}
                 accessibilityRole="button"
-                accessibilityLabel={`${i + 1}. ${p.label}`}
+                accessibilityLabel={`${i + 1}. ${p.label} — ${CARB_BAND_LABELS[p.band]}`}
+                accessibilityState={{ selected: isSelected }}
                 onPress={() => setSelected(p.id)}
                 style={[styles.partRow, i > 0 && styles.partRowSpaced, isSelected && styles.partRowSelected]}
               >
@@ -216,4 +226,6 @@ const styles = StyleSheet.create({
   partBand: { color: colors.textSubtle, fontSize: 11.5, marginTop: 1 },
   activeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.primary },
   noteCard: { marginTop: spacing.m },
+  // Alleen voor schermlezers: wel in de tree, niet zichtbaar op het scherm.
+  srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0 },
 });

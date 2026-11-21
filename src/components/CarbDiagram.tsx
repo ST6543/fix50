@@ -9,9 +9,14 @@
  * react-native-svg daar HTML-buttons van (of crasht), waardoor de tekening
  * verdwijnt. De tikbare gebieden staan daarom als onzichtbare Pressables
  * bovenop het diagram, precies op de genummerde hotspots.
+ *
+ * Toegankelijkheid: de tekening zelf is voor schermlezers verborgen (de cijfers
+ * zijn decoratie; de lijst eronder is de inhoud). De tikvlakken staan in de DOM
+ * in de volgorde van de lijst (1–12), zijn minstens 44 px groot en overlappen
+ * elkaar niet, ook niet op een smal scherm.
  */
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 import { colors } from '@/theme';
@@ -59,20 +64,25 @@ export function CarbDiagram({
     return { stroke: colors.border, strokeWidth: 1.6, fill: '#1A1D22', opacity: 0.7, on: false };
   };
 
-  /** Positie van de genummerde hotspots, in viewBox-coördinaten. */
+  /**
+   * Positie van de genummerde hotspots, in viewBox-coördinaten. De onderlinge
+   * afstand is bewust ruim genoeg dat tikvlakken van 44 px elkaar ook op een
+   * smal scherm niet raken (luchtfilter/choke en gasklep/gasnaald in het
+   * bijzonder).
+   */
   const pins: { id: CarbPartId; x: number; y: number }[] = [
-    { id: 'luchtfilter', x: 28, y: 58 },
-    { id: 'choke', x: 72, y: 40 },
+    { id: 'luchtfilter', x: 28, y: 172 },
+    { id: 'gasklep', x: 232, y: 56 },
     { id: 'venturi', x: 161, y: 70 },
-    { id: 'gasklep', x: 232, y: 62 },
-    { id: 'naald', x: 226, y: 104 },
+    { id: 'naald', x: 240, y: 126 },
     { id: 'naaldsproeier', x: 168, y: 130 },
-    { id: 'uitgang', x: 316, y: 128 },
-    { id: 'vlotternaald', x: 101, y: 178 },
+    { id: 'hoofdsproeier', x: 176, y: 276 },
+    { id: 'stationairsproeier', x: 236, y: 248 },
+    { id: 'luchtschroef', x: 306, y: 196 },
     { id: 'vlotter', x: 112, y: 240 },
-    { id: 'hoofdsproeier', x: 178, y: 272 },
-    { id: 'stationairsproeier', x: 234, y: 252 },
-    { id: 'luchtschroef', x: 303, y: 184 },
+    { id: 'vlotternaald', x: 101, y: 178 },
+    { id: 'choke', x: 86, y: 34 },
+    { id: 'uitgang', x: 316, y: 128 },
   ];
 
   /** Genummerde hotspot; klikbaar en gekleurd naar de gasstand. */
@@ -107,8 +117,36 @@ export function CarbDiagram({
 
   const fuel = 'rgba(56,189,248,0.14)';
 
+  /**
+   * Tikvlakken: 44 px (richtlijn voor aanraakdoelen) rond de hotspot. De positie
+   * is een percentage van de kaart, zodat een tikvlak precies op zijn hotspot
+   * blijft staan bij elke kaartbreedte. De hotspots liggen ver genoeg uit elkaar
+   * dat deze vierkanten elkaar ook op een smal scherm niet raken.
+   */
+  const hitSize = 44;
+  const orderedPins = [...pins].sort((a, b) => PARTNUM[a.id] - PARTNUM[b.id]);
+  const hitStyle = (p: { x: number; y: number }): StyleProp<ViewStyle> => [
+    styles.hit,
+    {
+      width: hitSize,
+      height: hitSize,
+      marginLeft: -hitSize / 2,
+      marginTop: -hitSize / 2,
+      left: `${(p.x / W) * 100}%` as `${number}%`,
+      top: `${(p.y / H) * 100}%` as `${number}%`,
+    },
+  ];
+
   return (
     <View style={styles.wrap}>
+    {/* Puur decoratief voor schermlezers: de cijfers staan ook in de lijst. */}
+    <View
+      style={styles.svgWrap}
+      aria-hidden
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
     <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height="100%">
       {/* Luchtfilter links */}
       <G>
@@ -313,20 +351,22 @@ export function CarbDiagram({
         <Pinn key={p.id} id={p.id} x={p.x} y={p.y} />
       ))}
     </Svg>
+    </View>
 
-    {/* Onzichtbare tikvlakken bovenop de hotspots. */}
-    {pins.map((p) => {
+    {/*
+      Onzichtbare tikvlakken bovenop de hotspots, in de DOM gesorteerd op
+      volgnummer 1–12 zodat de tabvolgorde gelijk is aan de lijst eronder.
+    */}
+    {orderedPins.map((p) => {
       const part = CARB_PARTS.find((x) => x.id === p.id)!;
       return (
         <Pressable
           key={p.id}
           accessibilityRole="button"
           accessibilityLabel={`${PARTNUM[p.id]}. ${part.label}`}
+          accessibilityState={{ selected: selected === p.id }}
           onPress={() => onSelect(p.id)}
-          style={[
-            styles.hit,
-            { left: `${(p.x / W) * 100}%`, top: `${(p.y / H) * 100}%` },
-          ]}
+          style={hitStyle(p)}
         />
       );
     })}
@@ -336,14 +376,9 @@ export function CarbDiagram({
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  hit: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    marginLeft: -20,
-    marginTop: -20,
-    borderRadius: 20,
-  },
+  // Vult de kaart zodat de SVG zijn 100% hoogte houdt.
+  svgWrap: { flex: 1 },
+  hit: { position: 'absolute' },
 });
 
 export default CarbDiagram;
