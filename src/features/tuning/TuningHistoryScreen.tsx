@@ -150,7 +150,8 @@ export default function TuningHistoryScreen() {
       // Bewaar de regels zodat een verkeerde klik terug te draaien is.
       setJetUndo(group);
       await reload();
-      setNote(jetUndoNotice(group));
+      // De strook met "Ongedaan maken" meldt dit al; geen dubbele regel eronder.
+      setNote(null);
     } catch {
       setNote('Verwijderen mislukt — controleer je verbinding.');
     } finally {
