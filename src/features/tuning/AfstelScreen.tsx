@@ -24,6 +24,7 @@ import {
   isJetChangePart,
   jetUndoNotice,
   measuredResultLine,
+  restoreJetConfig,
   splitJetNotes,
   type JetConfig,
 } from '@/lib/jet-log';
@@ -272,6 +273,12 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   // Zojuist verwijderde wissel, klaar om terug te zetten (ongedaan maken).
   const [jetUndo, setJetUndo] = useState<TuningChange[] | null>(null);
   const jetConfig: JetConfig = { mainJet, idleJet, clip: needleClip, airScrew };
+  // Heeft de gebruiker deze sessie al zelf aan de schuivers gedraaid? Dan
+  // laat de geladen log de simulator met rust.
+  const jetTouched = useRef(false);
+  // Startadvies zoals het nu geldt, als terugvalwaarde voor de geladen stand.
+  const carbRef = useRef(carb);
+  carbRef.current = carb;
 
   const jetSim = useMemo(
     () =>
@@ -370,6 +377,7 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   useEffect(() => {
     // Een andere scooter: een bewaarde verwijdering hoort daar niet meer bij.
     setJetUndo(null);
+    jetTouched.current = false;
     if (!activeScooter) {
       setJetLog([]);
       return;
@@ -378,7 +386,27 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
     tuningService
       .listChanges(activeScooter.id)
       .then((rows) => {
-        if (!cancelled) setJetLog(rows.filter((r) => isJetChangePart(r.part)).slice(0, JET_LOG_ROWS));
+        if (cancelled) return;
+        const jetRows = rows.filter((r) => isJetChangePart(r.part));
+        setJetLog(jetRows.slice(0, JET_LOG_ROWS));
+
+        // De laatst gelogde stand is de basislijn. Zo begint de simulator na
+        // een herstart niet weer bij het startadvies, klopt de diff-regel en
+        // kun je dezelfde wissel niet nog eens loggen.
+        const start = carbRef.current;
+        const restored = restoreJetConfig(jetRows, {
+          mainJet: start.jetHigh,
+          idleJet: idleJetTarget(start.jetHigh),
+          clip: start.clip,
+          airScrew: 1.5,
+        });
+        setJetBaseline(restored);
+        if (!jetTouched.current) {
+          setMainJet(restored.mainJet);
+          setIdleJet(restored.idleJet);
+          setNeedleClip(restored.clip);
+          setAirScrew(restored.airScrew);
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -930,7 +958,10 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 step={1}
                 target={Math.round((carb.jetLow + carb.jetHigh) / 2)}
                 hint={`Startadvies ${carb.jetLow}–${carb.jetHigh}; het streepje is het midden daarvan.`}
-                onChange={setMainJet}
+                onChange={(v) => {
+                  jetTouched.current = true;
+                  setMainJet(v);
+                }}
               />
               <Slider
                 label="Stationairsproeier"
@@ -940,12 +971,23 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 step={1}
                 target={idleJetTarget(mainJet)}
                 hint="Vuistregel: ongeveer 40% van de hoofdsproeier bij deze kleine carburateurs."
-                onChange={setIdleJet}
+                onChange={(v) => {
+                  jetTouched.current = true;
+                  setIdleJet(v);
+                }}
               />
               <Text style={styles.label}>Naaldclip (1 = hoogste stand, armst)</Text>
               <ChipRow>
                 {[1, 2, 3, 4, 5].map((n) => (
-                  <Chip key={n} label={`clip ${n}`} active={needleClip === n} onPress={() => setNeedleClip(n)} />
+                  <Chip
+                    key={n}
+                    label={`clip ${n}`}
+                    active={needleClip === n}
+                    onPress={() => {
+                      jetTouched.current = true;
+                      setNeedleClip(n);
+                    }}
+                  />
                 ))}
               </ChipRow>
               <Slider
@@ -957,12 +999,16 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 decimals={2}
                 unit="slag"
                 hint="Verder uit = meer lucht = armer. 1,5 slag is het neutrale uitgangspunt."
-                onChange={setAirScrew}
+                onChange={(v) => {
+                  jetTouched.current = true;
+                  setAirScrew(v);
+                }}
               />
               <Button
                 label="Startadvies overnemen"
                 variant="secondary"
                 onPress={() => {
+                  jetTouched.current = true;
                   setMainJet(carb.jetHigh);
                   setIdleJet(idleJetTarget(carb.jetHigh));
                   setNeedleClip(carb.clip);

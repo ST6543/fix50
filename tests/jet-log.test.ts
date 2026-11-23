@@ -11,6 +11,7 @@ import {
   diffJets,
   formatJetValue,
   isJetChangePart,
+  jetKeyForPart,
   JET_BATCH_WINDOW_MS,
   jetUndoNotice,
   latestPendingJetIds,
@@ -18,6 +19,8 @@ import {
   mixtureLine,
   nextStepFor,
   NO_TEST_RESULT,
+  parseJetValue,
+  restoreJetConfig,
   splitJetNotes,
   type JetConfig,
 } from '@/lib/jet-log';
@@ -127,6 +130,67 @@ describe('buildJetChangeRows', () => {
     const parts = splitJetNotes(rows[0]!.notes);
     expect(parts.testNote).toBe(NO_TEST_RESULT);
     expect(parts.nextStep).toBe(rows[0]!.nextStep);
+  });
+});
+
+describe('parseJetValue', () => {
+  it('leest de gelogde waarden terug naar een getal', () => {
+    expect(parseJetValue('Hoofdsproeier', '96')).toBe(96);
+    expect(parseJetValue('Stationairsproeier', '40 stationair')).toBe(40);
+    expect(parseJetValue('Naaldclip', 'clip 3')).toBe(3);
+    expect(parseJetValue('Luchtschroef', '1,5 slag')).toBe(1.5);
+    expect(parseJetValue('Luchtschroef', '2,00 slag')).toBe(2);
+  });
+
+  it('geeft null bij onleesbare of ongeldige waarden', () => {
+    expect(parseJetValue('Hoofdsproeier', '—')).toBeNull();
+    expect(parseJetValue('Hoofdsproeier', null)).toBeNull();
+    expect(parseJetValue('Naaldclip', 'clip 9')).toBeNull();
+    expect(parseJetValue('Rollen', '9,5g')).toBeNull();
+  });
+
+  it('koppelt elk onderdeel aan zijn simulatorveld', () => {
+    expect(jetKeyForPart('Hoofdsproeier')).toBe('mainJet');
+    expect(jetKeyForPart('Luchtschroef')).toBe('airScrew');
+    expect(jetKeyForPart('Rollen')).toBeNull();
+  });
+});
+
+describe('restoreJetConfig', () => {
+  const fallback = config();
+  const row = (part: string, changed_at: string, new_value: string) => ({ part, changed_at, new_value });
+
+  it('bouwt de gemonteerde stand op van oudste naar nieuwste wissel', () => {
+    const restored = restoreJetConfig(
+      [
+        row('Hoofdsproeier', '2026-11-19T10:05:00.000Z', '96'),
+        row('Hoofdsproeier', '2026-11-19T09:00:00.000Z', '95'),
+        row('Naaldclip', '2026-11-19T09:00:00.100Z', 'clip 4'),
+      ],
+      fallback,
+    );
+    expect(restored).toEqual({ mainJet: 96, idleJet: fallback.idleJet, clip: 4, airScrew: fallback.airScrew });
+  });
+
+  it('laat onderdelen zonder logregel op het startadvies staan', () => {
+    const restored = restoreJetConfig([row('Luchtschroef', '2026-11-19T10:05:00.000Z', '1,75 slag')], fallback);
+    expect(restored).toEqual({ ...fallback, airScrew: 1.75 });
+  });
+
+  it('negeert andere onderdelen, onleesbare waarden en regels zonder datum', () => {
+    const restored = restoreJetConfig(
+      [
+        row('Rollen', '2026-11-19T10:05:00.000Z', '9,5g'),
+        row('Hoofdsproeier', '2026-11-19T10:06:00.000Z', 'geen getal'),
+        row('Hoofdsproeier', 'geen-datum', '120'),
+      ],
+      fallback,
+    );
+    expect(restored).toEqual(fallback);
+  });
+
+  it('geeft bij een lege geschiedenis het startadvies terug', () => {
+    expect(restoreJetConfig([], fallback)).toEqual(fallback);
   });
 });
 

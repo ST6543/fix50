@@ -154,6 +154,59 @@ export function isJetChangePart(part: string): boolean {
   return (JET_PART_LABELS as readonly string[]).includes(part);
 }
 
+/** Welke simulator-instelling hoort bij een logregel? */
+export function jetKeyForPart(part: string): keyof JetConfig | null {
+  if (part === 'Hoofdsproeier') return 'mainJet';
+  if (part === 'Stationairsproeier') return 'idleJet';
+  if (part === 'Naaldclip') return 'clip';
+  if (part === 'Luchtschroef') return 'airScrew';
+  return null;
+}
+
+/**
+ * Leest een gelogde nieuwe waarde terug naar een getal, in de vorm die
+ * `formatJetValue` schrijft ("96", "40 stationair", "clip 3", "1,5 slag").
+ * Een onleesbare waarde geeft null: dan blijft de vorige stand staan.
+ */
+export function parseJetValue(part: string, value: string | null | undefined): number | null {
+  const key = jetKeyForPart(part);
+  if (!key) return null;
+  const m = (value ?? '').match(/-?\d+(?:[.,]\d+)?/);
+  if (!m) return null;
+  const n = Number(m[0]!.replace(',', '.'));
+  if (!Number.isFinite(n)) return null;
+  // Clipstanden lopen van 1 t/m 5; alles daarbuiten is geen geldige stand.
+  if (key === 'clip' && (n < 1 || n > 5)) return null;
+  return n;
+}
+
+/**
+ * De stand die nu gemonteerd is, opgebouwd uit de gelogde wissels: oudste
+ * eerst, zodat elke wissel de vorige overschrijft. Onderdelen die nooit zijn
+ * gelogd houden de meegegeven basiswaarde (het startadvies).
+ *
+ * Hiermee begint de simulator na een herstart bij de laatst gelogde stand in
+ * plaats van weer bij het startadvies.
+ */
+export function restoreJetConfig(
+  changes: { part: string; changed_at: string; new_value?: string | null }[],
+  fallback: JetConfig,
+): JetConfig {
+  const rows = changes
+    .map((row) => ({ row, at: Date.parse(row.changed_at) }))
+    .filter((x) => Number.isFinite(x.at))
+    .sort((a, b) => a.at - b.at);
+
+  const out = { ...fallback };
+  for (const { row } of rows) {
+    const key = jetKeyForPart(row.part);
+    if (!key) continue;
+    const value = parseJetValue(row.part, row.new_value);
+    if (value !== null) out[key] = value;
+  }
+  return out;
+}
+
 function fmtScrew(v: number): string {
   return `${v.toFixed(2).replace('.', ',').replace(/,00$/, '').replace(/(,\d)0$/, '$1')} slag`;
 }
