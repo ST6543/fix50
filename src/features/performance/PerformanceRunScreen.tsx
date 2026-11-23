@@ -16,7 +16,13 @@ import {
   getActiveSetup,
   listChanges,
 } from '@/services/tuning';
-import { jetGroupLabel, pendingJetGroups } from '@/lib/jet-log';
+import {
+  initialJetKey,
+  jetChoices,
+  jetGroupHasRun,
+  jetGroupLabel,
+  JET_RETEST_WARNING,
+} from '@/lib/jet-log';
 import type { TuningChange, TuningSetup, UUID } from '@/types';
 import { performanceRunSchema } from '@/lib/validation';
 import { colors, fonts, spacing, typography } from '@/theme';
@@ -38,9 +44,12 @@ export default function PerformanceRunScreen() {
   // Actieve tuningsetup (voor koppeling van de meting aan de afstelling).
   const [activeSetup, setActiveSetup] = useState<TuningSetup | null>(null);
   const [setupId, setSetupId] = useState<UUID | null>(null);
-  // Sproeierwissels die nog op een meting wachten, en de gekozen wissel.
-  const [pendingGroups, setPendingGroups] = useState<TuningChange[][]>([]);
+  // Sproeierwissels om te testen (wachtend, plus een gekozen wissel die al
+  // een meting heeft), en de gekozen wissel.
+  const [choices, setChoices] = useState<TuningChange[][]>([]);
   const [jetKey, setJetKey] = useState<string | null>(linkedKey);
+  // Bevestiging dat een nieuwe meting de bestaande koppeling mag vervangen.
+  const [replaceConfirmed, setReplaceConfirmed] = useState(false);
 
   const samplesRef = useRef<GpsSample[]>([]);
   const smoothedRef = useRef(0);
@@ -79,17 +88,17 @@ export default function PerformanceRunScreen() {
   // aan te passen; er wordt niets meer op tijd geraden.
   useEffect(() => {
     let cancelled = false;
-    setPendingGroups([]);
+    setChoices([]);
     setJetKey(linkedKey);
     if (!activeScooter) return;
     listChanges(activeScooter.id)
       .then((rows) => {
         if (cancelled) return;
-        const groups = pendingJetGroups(rows);
-        setPendingGroups(groups);
-        // Zonder expliciete keuze staat de nieuwste wachtende wissel klaar,
-        // maar altijd zichtbaar en met één tik te wijzigen.
-        setJetKey((current) => (current && groups.some((g) => g[0]?.id === current) ? current : (groups[0]?.[0]?.id ?? null)));
+        const groups = jetChoices(rows, linkedKey);
+        setChoices(groups);
+        // Een meegegeven keuze blijft staan, ook als die al een meting heeft;
+        // anders staat de nieuwste wachtende wissel klaar.
+        setJetKey(initialJetKey(groups, linkedKey));
       })
       .catch(() => undefined);
     return () => {
@@ -97,7 +106,9 @@ export default function PerformanceRunScreen() {
     };
   }, [activeScooter?.id, linkedKey]);
 
-  const selectedJet = pendingGroups.find((g) => g[0]?.id === jetKey) ?? null;
+  const selectedJet = choices.find((g) => g[0]?.id === jetKey) ?? null;
+  // Deze wissel is al getest: een nieuwe meting vervangt de koppeling.
+  const replacesExisting = jetGroupHasRun(selectedJet);
 
   async function prepare() {
     setPhase('gps');
@@ -298,16 +309,26 @@ export default function PerformanceRunScreen() {
           </Card>
           <Card>
             <Text style={styles.jetPickLabel}>DEZE METING TEST</Text>
-            {pendingGroups.length > 0 ? (
+            {choices.length > 0 ? (
               <>
                 <ChipRow>
-                  <Chip label="Geen wissel" active={jetKey === null} onPress={() => setJetKey(null)} />
-                  {pendingGroups.slice(0, 6).map((group) => (
+                  <Chip
+                    label="Geen wissel"
+                    active={jetKey === null}
+                    onPress={() => {
+                      setJetKey(null);
+                      setReplaceConfirmed(false);
+                    }}
+                  />
+                  {choices.slice(0, 6).map((group) => (
                     <Chip
                       key={group[0]!.id}
                       label={jetGroupLabel(group)}
                       active={jetKey === group[0]!.id}
-                      onPress={() => setJetKey(group[0]!.id)}
+                      onPress={() => {
+                        setJetKey(group[0]!.id);
+                        setReplaceConfirmed(false);
+                      }}
                     />
                   ))}
                 </ChipRow>
@@ -316,6 +337,16 @@ export default function PerformanceRunScreen() {
                     ? `Top en 0–50 van deze meting komen als resultaat bij: ${jetGroupLabel(selectedJet)}.`
                     : 'Deze meting wordt niet aan een sproeierwissel gekoppeld.'}
                 </Text>
+                {replacesExisting ? (
+                  <View style={styles.jetReplaceBlock}>
+                    <Text style={styles.jetReplaceWarn}>{JET_RETEST_WARNING}</Text>
+                    <Chip
+                      label={replaceConfirmed ? 'Vervangen ✓' : 'Ik vervang de bestaande meting'}
+                      active={replaceConfirmed}
+                      onPress={() => setReplaceConfirmed(true)}
+                    />
+                  </View>
+                ) : null}
               </>
             ) : (
               <Text style={styles.jetPickHint}>
@@ -324,7 +355,11 @@ export default function PerformanceRunScreen() {
               </Text>
             )}
           </Card>
-          <Button label="START TEST" onPress={start} disabled={phase === 'saving'} />
+          <Button
+            label="START TEST"
+            onPress={start}
+            disabled={phase === 'saving' || (replacesExisting && !replaceConfirmed)}
+          />
           <Button label="Opslaan & stoppen" variant="secondary" onPress={stopAndSave} disabled={phase === 'saving'} />
           <Button
             label="Afbreken"
@@ -376,6 +411,8 @@ const styles = StyleSheet.create({
   setupTag: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   jetPickLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: spacing.xs },
   jetPickHint: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: spacing.s },
+  jetReplaceBlock: { marginTop: spacing.s, gap: spacing.s },
+  jetReplaceWarn: { color: colors.warning, fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
   gpsHint: { color: colors.textMuted, lineHeight: 19, marginBottom: spacing.m },
   runWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   liveTag: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.s },

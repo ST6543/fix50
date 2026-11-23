@@ -13,6 +13,9 @@ import {
   isJetChangePart,
   jetKeyForPart,
   JET_BATCH_WINDOW_MS,
+  initialJetKey,
+  jetChoices,
+  jetGroupHasRun,
   jetGroupLabel,
   jetRunLinkLine,
   jetUndoNotice,
@@ -219,6 +222,45 @@ describe('pendingJetGroups', () => {
     expect(
       pendingJetGroups([row('gemeten', 'Hoofdsproeier', '2026-11-19T10:05:00.000Z', 'run-1')]),
     ).toEqual([]);
+  });
+});
+
+describe('jetChoices / initialJetKey / jetGroupHasRun', () => {
+  const row = (id: string, part: string, changed_at: string, run_id: string | null = null) => ({
+    id,
+    part,
+    changed_at,
+    run_id,
+  });
+
+  const rows = [
+    row('gemeten', 'Hoofdsproeier', '2026-11-19T10:05:00.000Z', 'run-1'),
+    row('wacht-a', 'Hoofdsproeier', '2026-11-19T10:04:00.000Z'),
+    row('wacht-b', 'Naaldclip', '2026-11-19T10:04:00.120Z'),
+    row('rollen', 'Rollen', '2026-11-19T10:06:00.000Z'),
+  ];
+
+  it('houdt een gekozen wissel met meting in de keuzelijst', () => {
+    expect(jetChoices(rows, 'gemeten').map((g) => g.map((r) => r.id))).toEqual([
+      ['gemeten'],
+      ['wacht-b', 'wacht-a'],
+    ]);
+    // Zonder keuze blijven alleen de wissels over die nog op een meting wachten.
+    expect(jetChoices(rows).map((g) => g.map((r) => r.id))).toEqual([['wacht-b', 'wacht-a']]);
+  });
+
+  it('laat een meegegeven keuze nooit stil terugvallen op een andere wissel', () => {
+    const choices = jetChoices(rows, 'gemeten');
+    expect(initialJetKey(choices, 'gemeten')).toBe('gemeten');
+    expect(initialJetKey(jetChoices(rows), null)).toBe('wacht-b');
+    expect(initialJetKey([], null)).toBeNull();
+  });
+
+  it('herkent een wissel die al een meting heeft', () => {
+    expect(jetGroupHasRun([row('gemeten', 'Hoofdsproeier', '2026-11-19T10:05:00.000Z', 'run-1')])).toBe(true);
+    expect(jetGroupHasRun([row('wacht', 'Hoofdsproeier', '2026-11-19T10:04:00.000Z')])).toBe(false);
+    expect(jetGroupHasRun([])).toBe(false);
+    expect(jetGroupHasRun(null)).toBe(false);
   });
 });
 

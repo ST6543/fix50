@@ -14,7 +14,9 @@ import {
   composeJetNotes,
   groupHistoryRows,
   isJetChangePart,
+  jetGroupHasRun,
   jetUndoNotice,
+  JET_RETEST_WARNING,
   measuredResultLine,
   splitJetNotes,
 } from '@/lib/jet-log';
@@ -42,6 +44,8 @@ export default function TuningHistoryScreen() {
   const [jetEdit, setJetEdit] = useState<JetEdit | null>(null);
   // Welke wissel wacht op bevestiging voordat hij verwijderd wordt?
   const [jetDeleteId, setJetDeleteId] = useState<string | null>(null);
+  // Welke wissel wacht op bevestiging voordat een nieuwe meting de oude vervangt?
+  const [jetRetestId, setJetRetestId] = useState<string | null>(null);
   // Zojuist verwijderde wissel, klaar om terug te zetten (ongedaan maken).
   const [jetUndo, setJetUndo] = useState<TuningChange[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -94,6 +98,7 @@ export default function TuningHistoryScreen() {
     const first = group[0];
     if (!first) return;
     setJetDeleteId(null);
+    setJetRetestId(null);
     setJetEdit({
       key: first.id,
       note: splitJetNotes(first.notes).testNote ?? '',
@@ -332,14 +337,39 @@ export default function TuningHistoryScreen() {
                     </Pressable>
                   </View>
                 </View>
+              ) : jetRetestId === first.id ? (
+                <View style={styles.jetDeleteBlock}>
+                  <Text style={styles.jetDeleteWarn}>{JET_RETEST_WARNING}</Text>
+                  <View style={styles.jetLogActions}>
+                    <Pressable
+                      style={styles.sugApply}
+                      accessibilityLabel="Bestaande meting vervangen"
+                      onPress={() => {
+                        setJetRetestId(null);
+                        navigation.navigate('PerformanceRun', { jetChangeKey: first.id });
+                      }}
+                    >
+                      <Text style={styles.sugApplyText}>Ja, opnieuw testen</Text>
+                    </Pressable>
+                    <Pressable style={styles.sugApply} onPress={() => setJetRetestId(null)}>
+                      <Text style={styles.sugApplyText}>Annuleren</Text>
+                    </Pressable>
+                  </View>
+                </View>
               ) : (
                 <View style={styles.jetLogActions}>
                   <Pressable
                     style={styles.sugApply}
                     accessibilityLabel="GPS-test voor deze sproeierwissel"
-                    onPress={() => navigation.navigate('PerformanceRun', { jetChangeKey: first.id })}
+                    onPress={() =>
+                      jetGroupHasRun(group)
+                        ? setJetRetestId(first.id)
+                        : navigation.navigate('PerformanceRun', { jetChangeKey: first.id })
+                    }
                   >
-                    <Text style={styles.sugApplyText}>Test deze wissel</Text>
+                    <Text style={styles.sugApplyText}>
+                      {jetGroupHasRun(group) ? 'Opnieuw testen' : 'Test deze wissel'}
+                    </Text>
                   </Pressable>
                   <Pressable
                     style={styles.sugApply}
