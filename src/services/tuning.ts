@@ -2,7 +2,7 @@
 import { query } from './api';
 import { supabase } from '@/lib/supabase';
 import type { TuningChange, TuningSetup, UUID } from '@/types';
-import { JET_PART_LABELS, latestPendingJetIds } from '@/lib/jet-log';
+import { JET_PART_LABELS } from '@/lib/jet-log';
 
 export async function listSetups(scooterId: UUID): Promise<TuningSetup[]> {
   return query<TuningSetup[]>(
@@ -64,31 +64,32 @@ export async function listChanges(scooterId: UUID, limit = 100): Promise<TuningC
 }
 
 /**
- * Koppelt een net opgeslagen GPS-test aan de nieuwste sproeierwissel die nog
- * op een meting wacht. Zo hoeft de gebruiker het resultaat niet over te
- * typen: top en 0–50 komen uit de meting zelf.
+ * Koppelt een opgeslagen GPS-test aan precies de gekozen sproeierwissel. De
+ * keuze komt uit het scherm (of uit "test deze wissel"), niet uit een
+ * tijdvenster: zo hoort een meting nooit per ongeluk bij de verkeerde wissel.
  *
- * Geeft het aantal gekoppelde regels terug (0 = niets te koppelen).
+ * Geeft het aantal gekoppelde regels terug (0 = geen keuze gemaakt).
  */
-export async function attachRunToLatestJetChange(args: {
-  scooterId: UUID;
-  runId: UUID;
-}): Promise<number> {
-  const pending = await query<Pick<TuningChange, 'id' | 'part' | 'changed_at' | 'run_id'>[]>(
+export async function attachRunToJetChange(args: { runId: UUID; changeIds: UUID[] }): Promise<number> {
+  if (args.changeIds.length === 0) return 0;
+  await query<void>(() => supabase.from('tuning_changes').update({ run_id: args.runId }).in('id', args.changeIds));
+  return args.changeIds.length;
+}
+
+/**
+ * De sproeierwissel die bij een meting hoort, voor het resultaatscherm.
+ * Meerdere regels horen bij dezelfde wissel; de volgorde is die van de wissel.
+ */
+export async function listRunJetChanges(runId: UUID): Promise<TuningChange[]> {
+  return query<TuningChange[]>(
     () =>
       supabase
         .from('tuning_changes')
-        .select('id, part, changed_at, run_id')
-        .eq('scooter_id', args.scooterId)
-        .is('run_id', null)
+        .select('*')
+        .eq('run_id', runId)
         .in('part', [...JET_PART_LABELS])
-        .order('changed_at', { ascending: false })
-        .limit(20),
+        .order('changed_at', { ascending: true }),
   );
-  const ids = latestPendingJetIds(pending);
-  if (ids.length === 0) return 0;
-  await query<void>(() => supabase.from('tuning_changes').update({ run_id: args.runId }).in('id', ids));
-  return ids.length;
 }
 
 /**

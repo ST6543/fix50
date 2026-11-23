@@ -37,25 +37,32 @@ export const NO_TEST_RESULT = 'Nog geen testresultaat — na de testrit bougiekl
 export const JET_BATCH_WINDOW_MS = 5000;
 
 /**
- * Welke logregels wachten op de eerstvolgende GPS-test?
- * Alleen de nieuwste wissel telt: is er daarna alweer een nieuwe wissel
- * gelogd, dan hoort de meting bij die laatste stand, niet bij de oude.
+ * Welke wissels wachten nog op een GPS-test? Bewust een keuze in de UI in
+ * plaats van een tijdvenster: de gebruiker kiest zelf welke wissel hij test.
  */
-export function latestPendingJetIds(
-  changes: { id: string; part: string; changed_at: string; run_id?: string | null }[],
-): string[] {
-  const pending = changes.filter((c) => isJetChangePart(c.part) && !c.run_id);
-  const times = pending
-    .map((c) => Date.parse(c.changed_at))
-    .filter((t) => Number.isFinite(t));
-  if (times.length === 0) return [];
-  const newest = Math.max(...times);
-  return pending
-    .filter((c) => {
-      const t = Date.parse(c.changed_at);
-      return Number.isFinite(t) && newest - t <= JET_BATCH_WINDOW_MS;
-    })
-    .map((c) => c.id);
+export function pendingJetGroups<T extends JetChangeLike & { run_id?: string | null }>(changes: T[]): T[][] {
+  return groupJetChanges(changes.filter((c) => !c.run_id));
+}
+
+/** Korte regel voor een wissel in een keuzelijst, bijv. "Hoofdsproeier 94 → 96". */
+export function jetGroupLabel<T extends { part: string; old_value?: string | null; new_value?: string | null }>(
+  group: T[],
+): string {
+  const first = group[0];
+  if (!first) return 'Sproeierwissel';
+  const base = `${first.part} ${first.old_value ?? '—'} → ${first.new_value ?? '—'}`;
+  return group.length === 1 ? base : `${base} +${group.length - 1}`;
+}
+
+/**
+ * Regel op het resultaat: bij welke sproeierwissel deze meting hoort.
+ * Zonder koppeling zegt hij dat eerlijk, in plaats van een wissel te gokken.
+ */
+export function jetRunLinkLine(
+  changes: { part: string; old_value?: string | null; new_value?: string | null }[],
+): string {
+  if (changes.length === 0) return 'Geen sproeierwissel aan deze meting gekoppeld.';
+  return changes.map((c) => `${c.part}: ${c.old_value ?? '—'} → ${c.new_value ?? '—'}`).join(' · ');
 }
 
 /** Marker waarmee de volgende stap in de notitie wordt vastgelegd. */

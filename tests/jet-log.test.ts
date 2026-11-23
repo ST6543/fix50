@@ -13,13 +13,15 @@ import {
   isJetChangePart,
   jetKeyForPart,
   JET_BATCH_WINDOW_MS,
+  jetGroupLabel,
+  jetRunLinkLine,
   jetUndoNotice,
-  latestPendingJetIds,
   measuredResultLine,
   mixtureLine,
   nextStepFor,
   NO_TEST_RESULT,
   parseJetValue,
+  pendingJetGroups,
   restoreJetConfig,
   splitJetNotes,
   type JetConfig,
@@ -194,7 +196,7 @@ describe('restoreJetConfig', () => {
   });
 });
 
-describe('latestPendingJetIds', () => {
+describe('pendingJetGroups', () => {
   const row = (id: string, part: string, changed_at: string, run_id: string | null = null) => ({
     id,
     part,
@@ -202,35 +204,41 @@ describe('latestPendingJetIds', () => {
     run_id,
   });
 
-  it('kiest alleen de nieuwste wissel die nog wacht', () => {
-    const ids = latestPendingJetIds([
-      row('oud', 'Hoofdsproeier', '2026-11-19T10:00:00.000Z'),
-      row('nieuw-a', 'Hoofdsproeier', '2026-11-19T10:05:00.000Z'),
-      row('nieuw-b', 'Naaldclip', '2026-11-19T10:05:00.120Z'),
-    ]);
-    expect(ids).toEqual(['nieuw-a', 'nieuw-b']);
-  });
-
-  it('slaat regels met een meting en niet-sproeierregels over', () => {
-    const ids = latestPendingJetIds([
+  it('laat alleen wissels zien die nog op een meting wachten', () => {
+    const groups = pendingJetGroups([
       row('gemeten', 'Hoofdsproeier', '2026-11-19T10:05:00.000Z', 'run-1'),
-      row('rollen', 'Rollen', '2026-11-19T10:05:00.100Z'),
-      row('sproeier', 'Stationairsproeier', '2026-11-19T10:04:59.900Z'),
+      row('wacht-a', 'Hoofdsproeier', '2026-11-19T10:04:00.000Z'),
+      row('wacht-b', 'Naaldclip', '2026-11-19T10:04:00.120Z'),
+      row('rollen', 'Rollen', '2026-11-19T10:06:00.000Z'),
     ]);
-    expect(ids).toEqual(['sproeier']);
+    // Nieuwste wissel eerst, en de regels van één wissel bij elkaar.
+    expect(groups.map((g) => g.map((r) => r.id))).toEqual([['wacht-b', 'wacht-a']]);
   });
 
-  it('geeft niets terug als er niets wacht of de datum onleesbaar is', () => {
-    expect(latestPendingJetIds([])).toEqual([]);
-    expect(latestPendingJetIds([row('x', 'Hoofdsproeier', 'geen-datum')])).toEqual([]);
+  it('geeft een lege lijst als alles al een meting heeft', () => {
+    expect(
+      pendingJetGroups([row('gemeten', 'Hoofdsproeier', '2026-11-19T10:05:00.000Z', 'run-1')]),
+    ).toEqual([]);
+  });
+});
+
+describe('jetGroupLabel / jetRunLinkLine', () => {
+  const row = (part: string, old_value: string | null, new_value: string | null) => ({ part, old_value, new_value });
+
+  it('vat een wissel kort samen voor de keuzelijst', () => {
+    expect(jetGroupLabel([row('Hoofdsproeier', '94', '96')])).toBe('Hoofdsproeier 94 → 96');
+    expect(jetGroupLabel([row('Hoofdsproeier', '94', '96'), row('Naaldclip', 'clip 3', 'clip 4')])).toBe(
+      'Hoofdsproeier 94 → 96 +1',
+    );
+    expect(jetGroupLabel([])).toBe('Sproeierwissel');
+    expect(jetGroupLabel([row('Naaldclip', null, null)])).toBe('Naaldclip — → —');
   });
 
-  it('houdt een langere reeks van dezelfde wissel bij elkaar binnen het venster', () => {
-    const late = '2026-11-19T10:05:00.000Z';
-    const early = new Date(Date.parse(late) - JET_BATCH_WINDOW_MS).toISOString();
-    const buiten = new Date(Date.parse(late) - JET_BATCH_WINDOW_MS - 1000).toISOString();
-    expect(latestPendingJetIds([row('a', 'Hoofdsproeier', late), row('b', 'Naaldclip', early)])).toEqual(['a', 'b']);
-    expect(latestPendingJetIds([row('a', 'Hoofdsproeier', late), row('b', 'Naaldclip', buiten)])).toEqual(['a']);
+  it('toont op het resultaat bij welke wissel de meting hoort', () => {
+    expect(jetRunLinkLine([row('Hoofdsproeier', '94', '96'), row('Naaldclip', 'clip 3', 'clip 4')])).toBe(
+      'Hoofdsproeier: 94 → 96 · Naaldclip: clip 3 → clip 4',
+    );
+    expect(jetRunLinkLine([])).toBe('Geen sproeierwissel aan deze meting gekoppeld.');
   });
 });
 

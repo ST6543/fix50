@@ -3,16 +3,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { useNavigation } from '@react-navigation/native';
-import type { AppNav } from '@/navigation/types';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { AppNav, RootStackParamList } from '@/navigation/types';
 
-import { Button, Card, Loading } from '@/components/ui';
+import { Button, Card, Chip, ChipRow, Loading } from '@/components/ui';
 import { AlertCircleIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import { computeMetrics, gpsQuality, isStationaryEnough, smoothSpeed, type GpsSample } from './gps';
 import * as perfService from '@/services/performance';
-import { attachRunToLatestJetChange, getActiveSetup } from '@/services/tuning';
-import type { TuningSetup, UUID } from '@/types';
+import {
+  attachRunToJetChange,
+  getActiveSetup,
+  listChanges,
+} from '@/services/tuning';
+import { jetGroupLabel, pendingJetGroups } from '@/lib/jet-log';
+import type { TuningChange, TuningSetup, UUID } from '@/types';
 import { performanceRunSchema } from '@/lib/validation';
 import { colors, fonts, spacing, typography } from '@/theme';
 
@@ -21,6 +26,9 @@ type Nav = AppNav;
 export default function PerformanceRunScreen() {
   const navigation = useNavigation<Nav>();
   const { activeScooter } = useScooters();
+  // Vanuit een sproeierwissel gestart? Dan staat die wissel vast.
+  const route = useRoute<RouteProp<RootStackParamList, 'PerformanceRun'>>();
+  const linkedKey = route.params?.jetChangeKey ?? null;
 
   const [phase, setPhase] = useState<'pre' | 'gps' | 'ready' | 'running' | 'saving'>('pre');
   const [speed, setSpeed] = useState(0);
@@ -30,6 +38,9 @@ export default function PerformanceRunScreen() {
   // Actieve tuningsetup (voor koppeling van de meting aan de afstelling).
   const [activeSetup, setActiveSetup] = useState<TuningSetup | null>(null);
   const [setupId, setSetupId] = useState<UUID | null>(null);
+  // Sproeierwissels die nog op een meting wachten, en de gekozen wissel.
+  const [pendingGroups, setPendingGroups] = useState<TuningChange[][]>([]);
+  const [jetKey, setJetKey] = useState<string | null>(linkedKey);
 
   const samplesRef = useRef<GpsSample[]>([]);
   const smoothedRef = useRef(0);
@@ -63,6 +74,30 @@ export default function PerformanceRunScreen() {
       cancelled = true;
     };
   }, [activeScooter?.id]);
+
+  // Welke sproeierwissel test je? De keuze staat zichtbaar in het scherm en is
+  // aan te passen; er wordt niets meer op tijd geraden.
+  useEffect(() => {
+    let cancelled = false;
+    setPendingGroups([]);
+    setJetKey(linkedKey);
+    if (!activeScooter) return;
+    listChanges(activeScooter.id)
+      .then((rows) => {
+        if (cancelled) return;
+        const groups = pendingJetGroups(rows);
+        setPendingGroups(groups);
+        // Zonder expliciete keuze staat de nieuwste wachtende wissel klaar,
+        // maar altijd zichtbaar en met één tik te wijzigen.
+        setJetKey((current) => (current && groups.some((g) => g[0]?.id === current) ? current : (groups[0]?.[0]?.id ?? null)));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeScooter?.id, linkedKey]);
+
+  const selectedJet = pendingGroups.find((g) => g[0]?.id === jetKey) ?? null;
 
   async function prepare() {
     setPhase('gps');
@@ -203,11 +238,12 @@ export default function PerformanceRunScreen() {
           started_at: new Date(Date.now() - metrics.durationS * 1000).toISOString(),
         },
       });
-      // Eerstvolgende meting = testresultaat van de nieuwste gelogde sproeierwissel.
+      // De gekozen sproeierwissel krijgt deze meting als testresultaat.
       // Mislukt dit, dan blijft de meting gewoon bestaan; alleen de koppeling ontbreekt.
-      if (activeScooter?.id) {
-        await attachRunToLatestJetChange({ scooterId: activeScooter.id, runId: saved.id }).catch(() => 0);
-      }
+      await attachRunToJetChange({
+        runId: saved.id,
+        changeIds: selectedJet?.map((c) => c.id) ?? [],
+      }).catch(() => 0);
       watchRef.current?.remove();
       navigation.replace('PerformanceResult', { runId: saved.id });
     } catch (err) {
@@ -260,6 +296,34 @@ export default function PerformanceRunScreen() {
                 : 'Geen actieve tuningsetup — meting wordt niet gekoppeld aan een afstelling.'}
             </Text>
           </Card>
+          <Card>
+            <Text style={styles.jetPickLabel}>DEZE METING TEST</Text>
+            {pendingGroups.length > 0 ? (
+              <>
+                <ChipRow>
+                  <Chip label="Geen wissel" active={jetKey === null} onPress={() => setJetKey(null)} />
+                  {pendingGroups.slice(0, 6).map((group) => (
+                    <Chip
+                      key={group[0]!.id}
+                      label={jetGroupLabel(group)}
+                      active={jetKey === group[0]!.id}
+                      onPress={() => setJetKey(group[0]!.id)}
+                    />
+                  ))}
+                </ChipRow>
+                <Text style={styles.jetPickHint}>
+                  {selectedJet
+                    ? `Top en 0–50 van deze meting komen als resultaat bij: ${jetGroupLabel(selectedJet)}.`
+                    : 'Deze meting wordt niet aan een sproeierwissel gekoppeld.'}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.jetPickHint}>
+                Geen sproeierwissel wacht op een meting. Log eerst een wissel in de Afstelhulp; die kun je daar ook
+                direct testen.
+              </Text>
+            )}
+          </Card>
           <Button label="START TEST" onPress={start} disabled={phase === 'saving'} />
           <Button label="Opslaan & stoppen" variant="secondary" onPress={stopAndSave} disabled={phase === 'saving'} />
           <Button
@@ -310,6 +374,8 @@ const styles = StyleSheet.create({
   preBody: { color: colors.text, lineHeight: 22 },
   gpsStatus: { color: colors.primary, textAlign: 'center', fontWeight: '700', marginBottom: spacing.s },
   setupTag: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
+  jetPickLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: spacing.xs },
+  jetPickHint: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: spacing.s },
   gpsHint: { color: colors.textMuted, lineHeight: 19, marginBottom: spacing.m },
   runWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   liveTag: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.s },

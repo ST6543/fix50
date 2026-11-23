@@ -25,7 +25,8 @@ export type RootStackParamList = {
   EngineDatabase: undefined;
   TuningHistory: undefined;
   SetupComparison: undefined;
-  PerformanceRun: undefined;
+  /** `jetChangeKey` = id van een sproeierwissel: de meting hoort dan bij die wissel. */
+  PerformanceRun: { jetChangeKey?: string } | undefined;
   PerformanceResult: { runId: string };
   PerformanceHistory: undefined;
   ScooterDetail: { scooterId: string };

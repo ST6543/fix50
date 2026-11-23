@@ -207,7 +207,7 @@ export interface TuningChange {
   id: UUID;
   scooter_id: UUID;
   setup_id: UUID | null;
-  /** GPS-test als testresultaat; null = wacht nog op de eerstvolgende meting. */
+  /** GPS-test als testresultaat; null = nog geen meting aan deze wissel gekoppeld. */
   run_id: UUID | null;
   changed_at: string;
   km_at_change: number | null;

@@ -605,7 +605,7 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
       const list = await tuningService.listChanges(activeScooter.id);
       setJetLog(list.filter((r) => isJetChangePart(r.part)).slice(0, JET_LOG_ROWS));
       setLogNote(
-        `${rows.length} sproeierwijziging${rows.length === 1 ? '' : 'en'} opgeslagen — de eerstvolgende GPS-test wordt automatisch als testresultaat gekoppeld.`,
+        `${rows.length} sproeierwijziging${rows.length === 1 ? '' : 'en'} opgeslagen — start de GPS-test met "Test deze wissel" om het resultaat eraan te koppelen.`,
       );
     } catch {
       setLogNote('Opslaan van de sproeierwissel mislukt — controleer je verbinding.');
@@ -1175,6 +1175,13 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                           </View>
                         ) : (
                           <View style={styles.jetLogActions}>
+                            <Pressable
+                              style={styles.sugApply}
+                              accessibilityLabel="GPS-test voor deze sproeierwissel"
+                              onPress={() => navigation.navigate('PerformanceRun', { jetChangeKey: first.id })}
+                            >
+                              <Text style={styles.sugApplyText}>Test deze wissel</Text>
+                            </Pressable>
                             <Pressable
                               style={styles.sugApply}
                               accessibilityLabel="Sproeierwissel corrigeren"

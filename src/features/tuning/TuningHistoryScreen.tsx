@@ -336,6 +336,13 @@ export default function TuningHistoryScreen() {
                 <View style={styles.jetLogActions}>
                   <Pressable
                     style={styles.sugApply}
+                    accessibilityLabel="GPS-test voor deze sproeierwissel"
+                    onPress={() => navigation.navigate('PerformanceRun', { jetChangeKey: first.id })}
+                  >
+                    <Text style={styles.sugApplyText}>Test deze wissel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.sugApply}
                     accessibilityLabel="Sproeierwissel corrigeren"
                     onPress={() => startJetEdit(group)}
                   >

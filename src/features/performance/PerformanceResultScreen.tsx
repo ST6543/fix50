@@ -9,10 +9,12 @@ import { SpeedChart } from '@/components/charts';
 import { CountUp, FadeInView } from '@/components/motion';
 import { FlagIcon } from '@/components/icons';
 import * as perfService from '@/services/performance';
+import * as tuningService from '@/services/tuning';
+import { jetRunLinkLine } from '@/lib/jet-log';
 import { useScooters } from '@/hooks/useScooters';
 import { formatDateTime, formatDistance, formatSeconds, formatSpeed } from '@/lib/format';
 import { colors, spacing, typography } from '@/theme';
-import type { PerformanceRun } from '@/types';
+import type { PerformanceRun, TuningChange } from '@/types';
 
 type RouteParams = { PerformanceResult: { runId: string } };
 
@@ -20,6 +22,8 @@ export default function PerformanceResultScreen() {
   const route = useRoute<RouteProp<RouteParams, 'PerformanceResult'>>();
   const { activeScooter } = useScooters();
   const [run, setRun] = useState<PerformanceRun | null>(null);
+  // De sproeierwissel waar deze meting bij hoort (leeg = geen koppeling).
+  const [linked, setLinked] = useState<TuningChange[]>([]);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
@@ -29,6 +33,10 @@ export default function PerformanceResultScreen() {
         .then((runs) => setRun(runs.find((r) => r.id === route.params.runId) ?? null))
         .catch(() => setRun(null))
         .finally(() => setLoading(false));
+      tuningService
+        .listRunJetChanges(route.params.runId)
+        .then(setLinked)
+        .catch(() => setLinked([]));
     }, [route.params.runId, activeScooter]),
   );
 
@@ -53,6 +61,12 @@ export default function PerformanceResultScreen() {
             tone={qualityTone}
           />
         </View>
+
+        <Card style={styles.linkCard}>
+          <Text style={styles.linkLabel}>DEZE METING HOORT BIJ</Text>
+          <Text style={styles.linkValue}>{jetRunLinkLine(linked)}</Text>
+          {linked[0] ? <Text style={styles.linkMeta}>{formatDateTime(linked[0].changed_at)}</Text> : null}
+        </Card>
 
         <FadeInView>
           <Card style={styles.hero}>
@@ -116,6 +130,10 @@ const styles = StyleSheet.create({
   content: { padding: spacing.l, paddingBottom: spacing.xxl },
   date: { color: colors.textMuted, marginBottom: spacing.xs },
   badgeRow: { flexDirection: 'row', marginBottom: spacing.l },
+  linkCard: { marginBottom: spacing.m },
+  linkLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+  linkValue: { color: colors.text, fontSize: 14.5, fontWeight: '700', lineHeight: 20, marginTop: 4 },
+  linkMeta: { color: colors.textMuted, fontSize: 12.5, marginTop: 2 },
   hero: { alignItems: 'center', paddingVertical: spacing.xl, marginBottom: spacing.m },
   heroLabel: { color: colors.textMuted, fontSize: 15 },
   heroValue: { ...typography.metric, marginTop: spacing.xs },
