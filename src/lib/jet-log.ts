@@ -56,25 +56,14 @@ export const JET_RETEST_WARNING =
   'Deze wissel heeft al een GPS-meting. Een nieuwe meting vervangt de koppeling met die meting.';
 
 /**
- * Wissels voor de keuzelijst in de GPS-meter: alle wachtende wissels, plus de
- * gekozen wissel als die al een meting heeft. Zo blijft een meegegeven keuze
- * zichtbaar in plaats van stil terug te vallen op een andere wissel.
+ * Wissels voor de keuzelijst in de GPS-meter: de wachtende wissels, plus de
+ * wissel waar je vandaan kwam als die al een meting heeft (opnieuw testen).
  */
 export function jetChoices<T extends JetChangeLike>(changes: T[], linkedKey?: string | null): T[][] {
   const pendingIds = new Set(pendingJetGroups(changes).map((g) => g[0]?.id));
   return groupJetChanges(changes).filter(
     (g) => pendingIds.has(g[0]?.id) || (!!linkedKey && g[0]?.id === linkedKey),
   );
-}
-
-/**
- * De wissel die de meter voorselecteert. Een meegegeven keuze blijft altijd
- * staan, ook als die al een meting heeft; zonder keuze staat de nieuwste
- * wachtende wissel klaar.
- */
-export function initialJetKey<T extends JetChangeLike>(choices: T[][], linkedKey?: string | null): string | null {
-  if (linkedKey) return linkedKey;
-  return choices[0]?.[0]?.id ?? null;
 }
 
 /** Korte regel voor een wissel in een keuzelijst, bijv. "Hoofdsproeier 94 → 96". */

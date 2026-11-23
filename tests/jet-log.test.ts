@@ -13,7 +13,6 @@ import {
   isJetChangePart,
   jetKeyForPart,
   JET_BATCH_WINDOW_MS,
-  initialJetKey,
   jetChoices,
   jetGroupHasRun,
   jetGroupLabel,
@@ -225,7 +224,7 @@ describe('pendingJetGroups', () => {
   });
 });
 
-describe('jetChoices / initialJetKey / jetGroupHasRun', () => {
+describe('jetChoices / jetGroupHasRun', () => {
   const row = (id: string, part: string, changed_at: string, run_id: string | null = null) => ({
     id,
     part,
@@ -247,13 +246,6 @@ describe('jetChoices / initialJetKey / jetGroupHasRun', () => {
     ]);
     // Zonder keuze blijven alleen de wissels over die nog op een meting wachten.
     expect(jetChoices(rows).map((g) => g.map((r) => r.id))).toEqual([['wacht-b', 'wacht-a']]);
-  });
-
-  it('laat een meegegeven keuze nooit stil terugvallen op een andere wissel', () => {
-    const choices = jetChoices(rows, 'gemeten');
-    expect(initialJetKey(choices, 'gemeten')).toBe('gemeten');
-    expect(initialJetKey(jetChoices(rows), null)).toBe('wacht-b');
-    expect(initialJetKey([], null)).toBeNull();
   });
 
   it('herkent een wissel die al een meting heeft', () => {

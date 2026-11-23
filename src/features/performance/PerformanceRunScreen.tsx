@@ -16,13 +16,7 @@ import {
   getActiveSetup,
   listChanges,
 } from '@/services/tuning';
-import {
-  initialJetKey,
-  jetChoices,
-  jetGroupHasRun,
-  jetGroupLabel,
-  JET_RETEST_WARNING,
-} from '@/lib/jet-log';
+import { jetChoices, jetGroupHasRun, jetGroupLabel, JET_RETEST_WARNING } from '@/lib/jet-log';
 import type { TuningChange, TuningSetup, UUID } from '@/types';
 import { performanceRunSchema } from '@/lib/validation';
 import { colors, fonts, spacing, typography } from '@/theme';
@@ -47,9 +41,8 @@ export default function PerformanceRunScreen() {
   // Sproeierwissels om te testen (wachtend, plus een gekozen wissel die al
   // een meting heeft), en de gekozen wissel.
   const [choices, setChoices] = useState<TuningChange[][]>([]);
+  // Geen keuze = geen koppeling. Alleen "Test deze wissel" vult een wissel in.
   const [jetKey, setJetKey] = useState<string | null>(linkedKey);
-  // Bevestiging dat een nieuwe meting de bestaande koppeling mag vervangen.
-  const [replaceConfirmed, setReplaceConfirmed] = useState(false);
 
   const samplesRef = useRef<GpsSample[]>([]);
   const smoothedRef = useRef(0);
@@ -84,8 +77,8 @@ export default function PerformanceRunScreen() {
     };
   }, [activeScooter?.id]);
 
-  // Welke sproeierwissel test je? De keuze staat zichtbaar in het scherm en is
-  // aan te passen; er wordt niets meer op tijd geraden.
+  // Welke sproeierwissel test je? Standaard geen: alleen "Test deze wissel"
+  // vult er een in, dus er wordt niets op tijd of op volgorde geraden.
   useEffect(() => {
     let cancelled = false;
     setChoices([]);
@@ -94,11 +87,7 @@ export default function PerformanceRunScreen() {
     listChanges(activeScooter.id)
       .then((rows) => {
         if (cancelled) return;
-        const groups = jetChoices(rows, linkedKey);
-        setChoices(groups);
-        // Een meegegeven keuze blijft staan, ook als die al een meting heeft;
-        // anders staat de nieuwste wachtende wissel klaar.
-        setJetKey(initialJetKey(groups, linkedKey));
+        setChoices(jetChoices(rows, linkedKey));
       })
       .catch(() => undefined);
     return () => {
@@ -312,40 +301,23 @@ export default function PerformanceRunScreen() {
             {choices.length > 0 ? (
               <>
                 <ChipRow>
-                  <Chip
-                    label="Geen wissel"
-                    active={jetKey === null}
-                    onPress={() => {
-                      setJetKey(null);
-                      setReplaceConfirmed(false);
-                    }}
-                  />
+                  <Chip label="Geen wissel" active={jetKey === null} onPress={() => setJetKey(null)} />
                   {choices.slice(0, 6).map((group) => (
                     <Chip
                       key={group[0]!.id}
                       label={jetGroupLabel(group)}
                       active={jetKey === group[0]!.id}
-                      onPress={() => {
-                        setJetKey(group[0]!.id);
-                        setReplaceConfirmed(false);
-                      }}
+                      onPress={() => setJetKey(group[0]!.id)}
                     />
                   ))}
                 </ChipRow>
                 <Text style={styles.jetPickHint}>
                   {selectedJet
                     ? `Top en 0–50 van deze meting komen als resultaat bij: ${jetGroupLabel(selectedJet)}.`
-                    : 'Deze meting wordt niet aan een sproeierwissel gekoppeld.'}
+                    : 'Geen wissel gekozen — deze meting wordt niet aan een sproeierwissel gekoppeld.'}
                 </Text>
                 {replacesExisting ? (
-                  <View style={styles.jetReplaceBlock}>
-                    <Text style={styles.jetReplaceWarn}>{JET_RETEST_WARNING}</Text>
-                    <Chip
-                      label={replaceConfirmed ? 'Vervangen ✓' : 'Ik vervang de bestaande meting'}
-                      active={replaceConfirmed}
-                      onPress={() => setReplaceConfirmed(true)}
-                    />
-                  </View>
+                  <Text style={styles.jetReplaceWarn}>{JET_RETEST_WARNING}</Text>
                 ) : null}
               </>
             ) : (
@@ -355,11 +327,7 @@ export default function PerformanceRunScreen() {
               </Text>
             )}
           </Card>
-          <Button
-            label="START TEST"
-            onPress={start}
-            disabled={phase === 'saving' || (replacesExisting && !replaceConfirmed)}
-          />
+          <Button label="START TEST" onPress={start} disabled={phase === 'saving'} />
           <Button label="Opslaan & stoppen" variant="secondary" onPress={stopAndSave} disabled={phase === 'saving'} />
           <Button
             label="Afbreken"
@@ -411,8 +379,7 @@ const styles = StyleSheet.create({
   setupTag: { color: colors.primary, fontWeight: '600', marginTop: spacing.xs },
   jetPickLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700', letterSpacing: 1, marginBottom: spacing.xs },
   jetPickHint: { color: colors.textMuted, fontSize: 12.5, lineHeight: 18, marginTop: spacing.s },
-  jetReplaceBlock: { marginTop: spacing.s, gap: spacing.s },
-  jetReplaceWarn: { color: colors.warning, fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
+  jetReplaceWarn: { color: colors.warning, fontSize: 12.5, lineHeight: 18, fontWeight: '600', marginTop: spacing.s },
   gpsHint: { color: colors.textMuted, lineHeight: 19, marginBottom: spacing.m },
   runWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   liveTag: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: spacing.s },
