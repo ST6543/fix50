@@ -92,6 +92,46 @@ export function groupJetChanges<T extends JetChangeLike>(changes: T[]): T[][] {
   return groups;
 }
 
+/**
+ * Een regel in een geschiedenislijst: een sproeierwissel (één of meer regels)
+ * of een gewone, losse wijziging. Zo houdt de tuninggeschiedenis dezelfde
+ * indeling als het logblok in de Afstelhulp.
+ */
+export type HistoryEntry<T> = { kind: 'jet'; rows: T[] } | { kind: 'single'; row: T };
+
+/**
+ * Groepeert alleen de sproeierregels tot wissels en laat alle andere
+ * wijzigingen los, in dezelfde volgorde (nieuwste eerst).
+ */
+export function groupHistoryRows<T extends JetChangeLike>(changes: T[]): HistoryEntry<T>[] {
+  const groups = groupJetChanges(changes);
+  const groupOf = new Map<string, T[]>();
+  for (const group of groups) {
+    for (const row of group) groupOf.set(row.id, group);
+  }
+
+  const ordered = [...changes].sort((a, b) => {
+    const ta = Date.parse(a.changed_at);
+    const tb = Date.parse(b.changed_at);
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
+
+  const out: HistoryEntry<T>[] = [];
+  const emitted = new Set<string>();
+  for (const row of ordered) {
+    if (!isJetChangePart(row.part)) {
+      out.push({ kind: 'single', row });
+      continue;
+    }
+    const group = groupOf.get(row.id) ?? [row];
+    const key = group[0]?.id ?? row.id;
+    if (emitted.has(key)) continue;
+    emitted.add(key);
+    out.push({ kind: 'jet', rows: group });
+  }
+  return out;
+}
+
 /** Welk circuit hoort bij een gewijzigd onderdeel? */
 export function circuitForKey(key: keyof JetConfig): CircuitId {
   if (key === 'clip') return 'mid';

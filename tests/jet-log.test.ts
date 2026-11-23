@@ -6,6 +6,7 @@ import {
   circuitForKey,
   composeJetNotes,
   describeJetDiff,
+  groupHistoryRows,
   groupJetChanges,
   diffJets,
   formatJetValue,
@@ -192,6 +193,36 @@ describe('groupJetChanges', () => {
 
   it('geeft een lege lijst als er niets te groeperen is', () => {
     expect(groupJetChanges([])).toEqual([]);
+  });
+});
+
+describe('groupHistoryRows', () => {
+  const row = (id: string, part: string, changed_at: string) => ({ id, part, changed_at, old_value: null, new_value: null });
+
+  it('maakt één regel per wissel en laat andere wijzigingen los', () => {
+    const entries = groupHistoryRows([
+      row('b', 'Naaldclip', '2026-11-19T10:05:00.000Z'),
+      row('a', 'Hoofdsproeier', '2026-11-19T10:05:00.100Z'),
+      row('rollen', 'Rollen', '2026-11-19T10:06:00.000Z'),
+      row('oud', 'Hoofdsproeier', '2026-11-19T10:00:00.000Z'),
+    ]);
+    expect(entries.map((e) => (e.kind === 'jet' ? e.rows.map((r) => r.id) : e.row.id))).toEqual([
+      'rollen',
+      ['a', 'b'],
+      ['oud'],
+    ]);
+  });
+
+  it('houdt de volgorde van nieuwste naar oudste aan', () => {
+    const entries = groupHistoryRows([
+      row('oud', 'Hoofdsproeier', '2026-11-19T09:00:00.000Z'),
+      row('nieuw', 'Hoofdsproeier', '2026-11-19T11:00:00.000Z'),
+    ]);
+    expect(entries.map((e) => (e.kind === 'jet' ? e.rows[0]!.id : e.row.id))).toEqual(['nieuw', 'oud']);
+  });
+
+  it('geeft een lege lijst als er niets is', () => {
+    expect(groupHistoryRows([])).toEqual([]);
   });
 });
 
