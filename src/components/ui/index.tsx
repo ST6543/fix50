@@ -329,6 +329,24 @@ export function MetricCard({
 }
 
 // ── Slider — sleepbare baan met optionele doelmarkering ─────
+/** Web-props die react-native-web doorgeeft maar die niet in ViewProps staan. */
+type WebKeyboardProps = {
+  onKeyDown?: (e: { key?: string; preventDefault?: () => void }) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  tabIndex?: number;
+};
+
+/** Procentwaarde voor absolute positionering binnen de baan. */
+function asPercent(ratio: number): `${number}%` {
+  return `${ratio * 100}%` as `${number}%`;
+}
+
+/** Positie van een waarde op de baan, 0 (min) tot 1 (max). */
+function ratioOf(value: number, min: number, span: number): number {
+  return Math.max(0, Math.min(1, (value - min) / span));
+}
+
 export function Slider({
   label,
   value,
@@ -365,9 +383,10 @@ export function Slider({
   const [focused, setFocused] = useState(false);
 
   const span = max - min || 1;
-  const ratio = Math.max(0, Math.min(1, (value - min) / span));
-  const targetRatio =
-    typeof target === 'number' && Number.isFinite(target) ? Math.max(0, Math.min(1, (target - min) / span)) : null;
+  const ratio = ratioOf(value, min, span);
+  const targetRatio = typeof target === 'number' && Number.isFinite(target) ? ratioOf(target, min, span) : null;
+  // Aan de uiteinden valt de knop binnen de baan, net als voorheen.
+  const thumbOffset = ratio === 0 ? 0 : ratio === 1 ? -22 : -11;
 
   const snap = useCallback(
     (raw: number) => {
@@ -435,15 +454,15 @@ export function Slider({
 
   // Web-only props: toetsenbord, focus en tabvolgorde. Native kent dit niet; de
   // schermlezer gebruikt daar accessibilityActions hieronder.
-  const webProps =
+  const webProps: ViewProps & WebKeyboardProps =
     Platform.OS === 'web'
-      ? ({
+      ? {
           onKeyDown,
           onFocus: () => setFocused(true),
           onBlur: () => setFocused(false),
           tabIndex: disabled ? -1 : 0,
-        } as unknown as ViewProps)
-      : ({} as ViewProps);
+        }
+      : {};
 
   return (
     <View style={[styles.slider, disabled && { opacity: 0.5 }]}>
@@ -492,27 +511,16 @@ export function Slider({
           de knop na een toetsenbordstap op zijn oude plek bleef staan.
         */}
         <View style={styles.sliderRail} />
-        <View style={[styles.sliderRailFill, { width: `${ratio * 100}%` as `${number}%` }]} />
+        <View style={[styles.sliderRailFill, { width: asPercent(ratio) }]} />
         {targetRatio !== null ? (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.sliderTarget,
-              { left: `${targetRatio * 100}%` as `${number}%`, marginLeft: -1 },
-              Math.abs(targetRatio - ratio) < 0.002 && { opacity: 0 },
-            ]}
-          />
+          <View pointerEvents="none" style={[styles.sliderTarget, { left: asPercent(targetRatio), marginLeft: -1 }]} />
         ) : null}
         <View
           pointerEvents="none"
           style={[
             styles.sliderThumb,
             dragging && styles.sliderThumbActive,
-            {
-              left: `${ratio * 100}%` as `${number}%`,
-              // Aan de uiteinden valt de knop binnen de baan, net als voorheen.
-              marginLeft: ratio === 0 ? 0 : ratio === 1 ? -22 : -11,
-            },
+            { left: asPercent(ratio), marginLeft: thumbOffset },
           ]}
         />
       </View>
