@@ -18,19 +18,13 @@ import { scanPlugPhoto, type PlugScanResult } from '@/services/plug-scan';
 import { calculateJetSimulation, idleJetTarget, type Mixture } from '@/lib/jet-simulator';
 import {
   buildJetChangeRows,
-  composeJetNotes,
   describeJetDiff,
   groupJetChanges,
   isJetChangePart,
-  jetGroupHasRun,
-  jetUndoNotice,
-  JET_RETEST_WARNING,
-  measuredResultLine,
   restoreJetConfig,
-  splitJetNotes,
   type JetConfig,
 } from '@/lib/jet-log';
-import { formatDateTime } from '@/lib/format';
+import { JetChangeCard, JetUndoStrip, useJetChangeActions } from './JetChangeCard';
 import {
   calculateCarb,
   calculateCvt,
@@ -69,10 +63,6 @@ const CARB_MM_OPTIONS = [12.5, 14, 16, 17.5, 19, 21, 24, 26, 28];
 /** Hoeveel regels/wissels het logblok laat zien. */
 const JET_LOG_ROWS = 24;
 const JET_LOG_GROUPS = 4;
-
-/** Eén regel binnen een correctie: de oorspronkelijke waarden plus zijn eigen volgende stap. */
-type JetEditRow = { id: string; part: string; oldValue: string; newValue: string; nextStep: string | null };
-type JetEdit = { key: string; note: string; rows: JetEditRow[] };
 
 function numFromText(value: string | null | undefined, fallback: number): number {
   const m = value?.match(/[\d.,]+/);
@@ -268,14 +258,24 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   const [jetTestNote, setJetTestNote] = useState('');
   const [jetLog, setJetLog] = useState<TuningChange[]>([]);
   const [jetLogBusy, setJetLogBusy] = useState(false);
-  // Welke gelogde wissel wordt op dit moment gecorrigeerd?
-  const [jetEdit, setJetEdit] = useState<JetEdit | null>(null);
-  // Welke wissel wacht op bevestiging voordat hij verwijderd wordt?
-  const [jetDeleteId, setJetDeleteId] = useState<string | null>(null);
-  // Welke wissel wacht op bevestiging voordat een nieuwe meting de oude vervangt?
-  const [jetRetestId, setJetRetestId] = useState<string | null>(null);
-  // Zojuist verwijderde wissel, klaar om terug te zetten (ongedaan maken).
-  const [jetUndo, setJetUndo] = useState<TuningChange[] | null>(null);
+
+  // Corrigeren, verwijderen, opnieuw testen en undo: dezelfde acties als in de
+  // tuninggeschiedenis, want beide schermen tonen dezelfde wisselkaart.
+  const jetActions = useJetChangeActions({
+    busy: jetLogBusy,
+    setBusy: setJetLogBusy,
+    reload: refreshJetLog,
+    onStartTest: (group) => {
+      const key = group[0]?.id;
+      if (key) navigation.navigate('PerformanceRun', { jetChangeKey: key });
+    },
+    setNote: setLogNote,
+    messages: {
+      edited: 'Sproeierwissel gecorrigeerd in het log.',
+      undone: 'Verwijderen ongedaan gemaakt — de wissel staat weer in het log.',
+    },
+  });
+
   const jetConfig: JetConfig = { mainJet, idleJet, clip: needleClip, airScrew };
   // Heeft de gebruiker deze sessie al zelf aan de schuivers gedraaid? Dan
   // laat de geladen log de simulator met rust.
@@ -380,7 +380,7 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
   // ── Sproeierlog laden (alleen regels uit de simulator) ───────
   useEffect(() => {
     // Een andere scooter: een bewaarde verwijdering hoort daar niet meer bij.
-    setJetUndo(null);
+    jetActions.resetUndo();
     jetTouched.current = false;
     if (!activeScooter) {
       setJetLog([]);
@@ -627,91 +627,6 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
     setJetLog(rows.filter((r) => isJetChangePart(r.part)).slice(0, JET_LOG_ROWS));
   }
 
-  /** Zet een gelogde wissel in de corrigeerstand, met de waarden zoals ze er nu staan. */
-  function startJetEdit(group: TuningChange[]) {
-    const first = group[0];
-    if (!first) return;
-    setJetRetestId(null);
-    setJetEdit({
-      key: first.id,
-      note: splitJetNotes(first.notes).testNote ?? '',
-      rows: group.map((c) => ({
-        id: c.id,
-        part: c.part,
-        oldValue: c.old_value ?? '',
-        newValue: c.new_value ?? '',
-        nextStep: splitJetNotes(c.notes).nextStep,
-      })),
-    });
-  }
-
-  function editJetRow(id: string, field: 'oldValue' | 'newValue', value: string) {
-    setJetEdit((prev) =>
-      prev ? { ...prev, rows: prev.rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)) } : prev,
-    );
-  }
-
-  const saveJetEdit = async () => {
-    if (!jetEdit) return;
-    setJetLogBusy(true);
-    try {
-      for (const row of jetEdit.rows) {
-        await tuningService.updateChange(row.id, {
-          old_value: row.oldValue.trim() || null,
-          new_value: row.newValue.trim() || null,
-          notes: composeJetNotes(jetEdit.note, row.nextStep),
-        });
-      }
-      setJetEdit(null);
-      await refreshJetLog();
-      setLogNote('Sproeierwissel gecorrigeerd in het log.');
-    } catch {
-      setLogNote('Correctie opslaan mislukt — controleer je verbinding.');
-    } finally {
-      setJetLogBusy(false);
-    }
-  };
-
-  function confirmDeleteJetGroup(group: TuningChange[]) {
-    const first = group[0];
-    if (!first) return;
-    setJetEdit(null);
-    setJetRetestId(null);
-    setJetDeleteId(first.id);
-  }
-
-  async function deleteJetGroup(group: TuningChange[]) {
-    setJetLogBusy(true);
-    try {
-      await tuningService.deleteChanges(group.map((c) => c.id));
-      if (jetEdit && group.some((c) => c.id === jetEdit.key)) setJetEdit(null);
-      setJetDeleteId(null);
-      // Bewaar de regels zodat een verkeerde klik terug te draaien is.
-      setJetUndo(group);
-      await refreshJetLog();
-      setLogNote(jetUndoNotice(group));
-    } catch {
-      setLogNote('Verwijderen mislukt — controleer je verbinding.');
-    } finally {
-      setJetLogBusy(false);
-    }
-  }
-
-  /** Zet de zojuist verwijderde wissel terug, met dezelfde id en hetzelfde tijdstip. */
-  async function undoJetDelete() {
-    if (!jetUndo) return;
-    setJetLogBusy(true);
-    try {
-      await tuningService.restoreChanges(jetUndo);
-      setJetUndo(null);
-      await refreshJetLog();
-      setLogNote('Verwijderen ongedaan gemaakt — de wissel staat weer in het log.');
-    } catch {
-      setLogNote('Ongedaan maken mislukt — controleer je verbinding.');
-    } finally {
-      setJetLogBusy(false);
-    }
-  }
 
   const saveGear = async () => {
     if (!activeScooter) return;
@@ -1079,159 +994,14 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
                 Een leeg testresultaat wordt ook eerlijk als “nog geen testresultaat” gelogd.
               </Text>
 
-              {jetUndo ? (
-                <View style={styles.jetUndoBlock}>
-                  <Text style={styles.jetUndoText}>{jetUndoNotice(jetUndo)}</Text>
-                  <Pressable
-                    style={styles.sugApply}
-                    disabled={jetLogBusy}
-                    accessibilityLabel="Verwijderen ongedaan maken"
-                    onPress={() => void undoJetDelete()}
-                  >
-                    <Text style={styles.sugApplyText}>{jetLogBusy ? 'Bezig…' : 'Ongedaan maken'}</Text>
-                  </Pressable>
-                </View>
-              ) : null}
+              <JetUndoStrip actions={jetActions} />
 
               {jetGroups.length > 0 ? (
                 <>
                   <Text style={[styles.labelSmall, { marginTop: spacing.m }]}>LAATSTE SPROEIERWISSELS</Text>
-                  {jetGroups.map((group) => {
-                    const first = group[0]!;
-                    const { testNote, nextStep } = splitJetNotes(first.notes);
-                    const edit = jetEdit && jetEdit.key === first.id ? jetEdit : null;
-                    return (
-                      <View key={first.id} style={styles.jetLogRow}>
-                        <View style={styles.jetLogHead}>
-                          <Text style={styles.jetLogPart}>
-                            {group.length === 1 ? first.part : `Wissel · ${group.length} onderdelen`}
-                          </Text>
-                          <Text style={styles.jetLogDate}>{formatDateTime(first.changed_at)}</Text>
-                        </View>
-                        {group.map((c) => (
-                          <Text key={c.id} style={styles.jetLogChange}>
-                            {group.length > 1 ? `${c.part}: ` : null}
-                            {c.old_value ?? '—'} <Text style={{ color: colors.primary }}>→</Text> {c.new_value ?? '—'}
-                          </Text>
-                        ))}
-                        {first.result ? <Text style={styles.jetLogResult}>{first.result}</Text> : null}
-                        {first.run ? <Text style={styles.jetLogMeasured}>{measuredResultLine(first.run)}</Text> : null}
-                        {testNote ? <Text style={styles.jetLogNote}>{testNote}</Text> : null}
-                        {nextStep ? <Text style={styles.jetLogNext}>{`Volgende stap: ${nextStep}`}</Text> : null}
-
-                        {edit ? (
-                          <View style={styles.jetEditBlock}>
-                            {edit.rows.map((row) => (
-                              <View key={row.id} style={styles.jetEditRow}>
-                                <Text style={styles.jetLogPart}>{row.part}</Text>
-                                <Input
-                                  label="Oude waarde"
-                                  value={row.oldValue}
-                                  onChangeText={(t) => editJetRow(row.id, 'oldValue', t)}
-                                />
-                                <Input
-                                  label="Nieuwe waarde"
-                                  value={row.newValue}
-                                  onChangeText={(t) => editJetRow(row.id, 'newValue', t)}
-                                />
-                              </View>
-                            ))}
-                            <Input
-                              label="Testresultaat"
-                              value={edit.note}
-                              onChangeText={(t) => setJetEdit((prev) => (prev ? { ...prev, note: t } : prev))}
-                              placeholder="Wat deed hij op de testrit?"
-                              multiline
-                              style={styles.jetEditNote}
-                            />
-                            <Text style={styles.hint}>
-                              Alleen de logregel wordt aangepast; de volgende stap en een gekoppelde GPS-meting blijven
-                              staan.
-                            </Text>
-                            <View style={styles.jetLogActions}>
-                              <Pressable style={styles.sugApply} disabled={jetLogBusy} onPress={saveJetEdit}>
-                                <Text style={styles.sugApplyText}>
-                                  {jetLogBusy ? 'Opslaan…' : 'Correctie opslaan'}
-                                </Text>
-                              </Pressable>
-                              <Pressable style={styles.sugApply} onPress={() => setJetEdit(null)}>
-                                <Text style={styles.sugApplyText}>Annuleren</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ) : jetDeleteId === first.id ? (
-                          <View style={styles.jetDeleteBlock}>
-                            <Text style={styles.jetDeleteWarn}>
-                              {`Deze wissel${group.length > 1 ? ` (${group.length} regels)` : ''} verdwijnt uit dit log en uit de tuninggeschiedenis.`}
-                            </Text>
-                            <View style={styles.jetLogActions}>
-                              <Pressable
-                                style={[styles.sugApply, styles.jetLogDelete]}
-                                disabled={jetLogBusy}
-                                onPress={() => void deleteJetGroup(group)}
-                              >
-                                <Text style={[styles.sugApplyText, styles.jetLogDeleteText]}>
-                                  {jetLogBusy ? 'Verwijderen…' : 'Ja, verwijderen'}
-                                </Text>
-                              </Pressable>
-                              <Pressable style={styles.sugApply} onPress={() => setJetDeleteId(null)}>
-                                <Text style={styles.sugApplyText}>Annuleren</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ) : jetRetestId === first.id ? (
-                          <View style={styles.jetDeleteBlock}>
-                            <Text style={styles.jetDeleteWarn}>{JET_RETEST_WARNING}</Text>
-                            <View style={styles.jetLogActions}>
-                              <Pressable
-                                style={styles.sugApply}
-                                accessibilityLabel="Bestaande meting vervangen"
-                                onPress={() => {
-                                  setJetRetestId(null);
-                                  navigation.navigate('PerformanceRun', { jetChangeKey: first.id });
-                                }}
-                              >
-                                <Text style={styles.sugApplyText}>Ja, opnieuw testen</Text>
-                              </Pressable>
-                              <Pressable style={styles.sugApply} onPress={() => setJetRetestId(null)}>
-                                <Text style={styles.sugApplyText}>Annuleren</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                        ) : (
-                          <View style={styles.jetLogActions}>
-                            <Pressable
-                              style={styles.sugApply}
-                              accessibilityLabel="GPS-test voor deze sproeierwissel"
-                              onPress={() =>
-                                jetGroupHasRun(group)
-                                  ? setJetRetestId(first.id)
-                                  : navigation.navigate('PerformanceRun', { jetChangeKey: first.id })
-                              }
-                            >
-                              <Text style={styles.sugApplyText}>
-                                {jetGroupHasRun(group) ? 'Opnieuw testen' : 'Test deze wissel'}
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              style={styles.sugApply}
-                              accessibilityLabel="Sproeierwissel corrigeren"
-                              onPress={() => startJetEdit(group)}
-                            >
-                              <Text style={styles.sugApplyText}>Corrigeren</Text>
-                            </Pressable>
-                            <Pressable
-                              style={[styles.sugApply, styles.jetLogDelete]}
-                              accessibilityLabel="Sproeierwissel verwijderen"
-                              onPress={() => confirmDeleteJetGroup(group)}
-                            >
-                              <Text style={[styles.sugApplyText, styles.jetLogDeleteText]}>Verwijderen</Text>
-                            </Pressable>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
+                  {jetGroups.map((group) => (
+                    <JetChangeCard key={group[0]!.id} group={group} actions={jetActions} variant="log" />
+                  ))}
                   <Button
                     label="Hele log in tuninggeschiedenis"
                     variant="ghost"
@@ -1816,45 +1586,6 @@ const styles = StyleSheet.create({
   circuitCardFocus: { borderColor: colors.primary, backgroundColor: colors.primarySubtle },
   circuitFocusNote: { color: colors.primary, fontSize: 12, fontWeight: '700', marginTop: 3 },
   circuitHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.s },
-  jetUndoBlock: {
-    marginTop: spacing.s,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radii.s,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    padding: spacing.s,
-    gap: spacing.xs,
-  },
-  jetUndoText: { color: colors.text, fontSize: 12.5, lineHeight: 18 },
-  jetLogRow: {
-    marginTop: spacing.s,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radii.s,
-    borderWidth: 1,
-    borderColor: colors.borderSoft,
-    padding: spacing.s,
-  },
-  jetLogHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.s },
-  jetLogPart: { color: colors.text, fontSize: 13.5, fontWeight: '800' },
-  jetLogDate: { color: colors.textSubtle, fontSize: 11 },
-  jetLogChange: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 2 },
-  jetLogResult: { color: colors.success, fontSize: 12.5, marginTop: 3 },
-  jetLogNote: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 3 },
-  jetLogNext: { color: colors.primary, fontSize: 12, lineHeight: 17, marginTop: 3, fontWeight: '600' },
-  jetLogMeasured: { color: colors.success, fontSize: 12.5, lineHeight: 18, marginTop: 3, fontWeight: '700' },
-  jetLogActions: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.s, flexWrap: 'wrap' },
-  jetEditBlock: {
-    marginTop: spacing.s,
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSoft,
-    paddingTop: spacing.s,
-  },
-  jetEditRow: { marginTop: spacing.s },
-  jetEditNote: { minHeight: 64, textAlignVertical: 'top' },
-  jetLogDelete: { borderColor: 'rgba(239,68,68,0.45)', backgroundColor: 'rgba(239,68,68,0.10)' },
-  jetLogDeleteText: { color: colors.danger },
-  jetDeleteBlock: { marginTop: spacing.s, borderTopWidth: 1, borderTopColor: colors.borderSoft, paddingTop: spacing.s },
-  jetDeleteWarn: { color: colors.warning, fontSize: 12, lineHeight: 17 },
   circuitLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
   circuitComponent: { color: colors.textSubtle, fontSize: 11.5, marginTop: 1 },
   planRow: { flexDirection: 'row', gap: spacing.s, alignItems: 'flex-start' },

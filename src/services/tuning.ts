@@ -68,12 +68,16 @@ export async function listChanges(scooterId: UUID, limit = 100): Promise<TuningC
  * keuze komt uit het scherm (of uit "test deze wissel"), niet uit een
  * tijdvenster: zo hoort een meting nooit per ongeluk bij de verkeerde wissel.
  *
- * Geeft het aantal gekoppelde regels terug (0 = geen keuze gemaakt).
+ * Geeft het aantal regels terug dat echt gekoppeld is. 0 betekent: geen keuze
+ * gemaakt, of de wissel bestaat niet meer. Zo kan het scherm dat melden in
+ * plaats van een meting stil ongekoppeld op te slaan.
  */
 export async function attachRunToJetChange(args: { runId: UUID; changeIds: UUID[] }): Promise<number> {
   if (args.changeIds.length === 0) return 0;
-  await query<void>(() => supabase.from('tuning_changes').update({ run_id: args.runId }).in('id', args.changeIds));
-  return args.changeIds.length;
+  const updated = await query<{ id: string }[]>(() =>
+    supabase.from('tuning_changes').update({ run_id: args.runId }).in('id', args.changeIds).select('id'),
+  );
+  return updated?.length ?? 0;
 }
 
 /**

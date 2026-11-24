@@ -27,7 +27,8 @@ export type RootStackParamList = {
   SetupComparison: undefined;
   /** `jetChangeKey` = id van een sproeierwissel: de meting hoort dan bij die wissel. */
   PerformanceRun: { jetChangeKey?: string } | undefined;
-  PerformanceResult: { runId: string };
+  /** `linkIssue` = de gekozen wissel kon niet gekoppeld worden; het resultaat meldt dat expliciet. */
+  PerformanceResult: { runId: string; linkIssue?: 'niet-gevonden' | 'opslaan-mislukt' };
   PerformanceHistory: undefined;
   ScooterDetail: { scooterId: string };
   EditScooter: { scooterId?: string } | undefined;

@@ -66,6 +66,17 @@ export function jetChoices<T extends JetChangeLike>(changes: T[], linkedKey?: st
   );
 }
 
+/**
+ * Zoekt de wissel met deze id in het hele log. De id komt uit de navigatie en
+ * is de bron van waarheid: staat de wissel niet in de keuzelijst (bijv. omdat
+ * hij al gemeten is of buiten de geladen regels valt), dan vinden we hem hier
+ * alsnog. null = de wissel staat niet (meer) in het log.
+ */
+export function findJetGroup<T extends JetChangeLike>(changes: T[], key?: string | null): T[] | null {
+  if (!key) return null;
+  return groupJetChanges(changes).find((g) => g[0]?.id === key) ?? null;
+}
+
 /** Korte regel voor een wissel in een keuzelijst, bijv. "Hoofdsproeier 94 → 96". */
 export function jetGroupLabel<T extends { part: string; old_value?: string | null; new_value?: string | null }>(
   group: T[],
@@ -324,6 +335,30 @@ export function splitJetNotes(notes: string | null | undefined): { testNote: str
     testNote: testNote.length > 0 ? testNote : null,
     nextStep: nextStep.length > 0 ? nextStep : null,
   };
+}
+
+/**
+ * Bevestiging vóór het verwijderen van een meting. Met een gekoppelde wissel
+ * benoemt de tekst dat de koppeling meeverdwijnt, zodat één tik geen bewijs
+ * stil wegneemt.
+ */
+export function runDeleteNotice(hasLinkedChange: boolean): string {
+  return hasLinkedChange
+    ? 'Deze meting verdwijnt. De koppeling met de sproeierwissel verdwijnt mee; die wacht daarna weer op een meting.'
+    : 'Deze meting verdwijnt definitief uit je metingen.';
+}
+
+/**
+ * Notitietekst voor weergave. De placeholdernotitie ("nog geen testresultaat")
+ * is misleidend zodra er een GPS-meting aan de wissel hangt: dan tonen we hem
+ * niet, want de gemeten regel vertelt het resultaat al. Andere notities blijven
+ * gewoon staan.
+ */
+export function visibleTestNote(testNote: string | null | undefined, hasRun: boolean): string | null {
+  const note = (testNote ?? '').trim();
+  if (!note) return null;
+  if (hasRun && note.startsWith(NO_TEST_RESULT)) return null;
+  return note;
 }
 
 /**

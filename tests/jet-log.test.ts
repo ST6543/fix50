@@ -9,6 +9,7 @@ import {
   groupHistoryRows,
   groupJetChanges,
   diffJets,
+  findJetGroup,
   formatJetValue,
   isJetChangePart,
   jetKeyForPart,
@@ -25,7 +26,9 @@ import {
   parseJetValue,
   pendingJetGroups,
   restoreJetConfig,
+  runDeleteNotice,
   splitJetNotes,
+  visibleTestNote,
   type JetConfig,
 } from '@/lib/jet-log';
 
@@ -254,6 +257,19 @@ describe('jetChoices / jetGroupHasRun', () => {
     expect(jetGroupHasRun([])).toBe(false);
     expect(jetGroupHasRun(null)).toBe(false);
   });
+
+  it('vindt een gekozen wissel ook buiten de keuzelijst', () => {
+    // De id uit de navigatie is leidend: een wissel die al een meting heeft
+    // staat niet in de keuzelijst, maar moet wel te koppelen zijn.
+    expect(findJetGroup(rows, 'gemeten')?.map((r) => r.id)).toEqual(['gemeten']);
+    // De sleutel is de id van de nieuwste regel van de wissel.
+    expect(findJetGroup(rows, 'wacht-b')?.map((r) => r.id)).toEqual(['wacht-b', 'wacht-a']);
+    expect(findJetGroup(rows, 'wacht-a')).toBeNull();
+    // Onbekend of geen keuze: niets om te koppelen.
+    expect(findJetGroup(rows, 'bestaat-niet')).toBeNull();
+    expect(findJetGroup(rows, null)).toBeNull();
+    expect(findJetGroup([], 'gemeten')).toBeNull();
+  });
 });
 
 describe('jetGroupLabel / jetRunLinkLine', () => {
@@ -389,6 +405,39 @@ describe('splitJetNotes', () => {
     expect(splitJetNotes('alleen een testresultaat')).toEqual({ testNote: 'alleen een testresultaat', nextStep: null });
     expect(splitJetNotes(null)).toEqual({ testNote: null, nextStep: null });
     expect(splitJetNotes('   ')).toEqual({ testNote: null, nextStep: null });
+  });
+});
+
+describe('runDeleteNotice', () => {
+  it('meldt dat de koppeling met de wissel meeverdwijnt', () => {
+    expect(runDeleteNotice(true)).toContain('koppeling met de sproeierwissel verdwijnt mee');
+  });
+
+  it('zegt het gewoon als er niets gekoppeld is', () => {
+    expect(runDeleteNotice(false)).toBe('Deze meting verdwijnt definitief uit je metingen.');
+  });
+});
+
+describe('visibleTestNote', () => {
+  it('onderdrukt de placeholdernotitie zodra er een meting hangt', () => {
+    expect(visibleTestNote(NO_TEST_RESULT, true)).toBeNull();
+    // Ook met een oudere variant die met dezelfde tekst begint.
+    expect(visibleTestNote(`${NO_TEST_RESULT} `, true)).toBeNull();
+  });
+
+  it('laat de placeholdernotitie staan zonder meting', () => {
+    expect(visibleTestNote(NO_TEST_RESULT, false)).toBe(NO_TEST_RESULT);
+  });
+
+  it('laat een echt testresultaat altijd zien', () => {
+    expect(visibleTestNote('bougie koffiebruin', true)).toBe('bougie koffiebruin');
+    expect(visibleTestNote('bougie koffiebruin', false)).toBe('bougie koffiebruin');
+  });
+
+  it('geeft null bij een lege notitie', () => {
+    expect(visibleTestNote('', true)).toBeNull();
+    expect(visibleTestNote(null, false)).toBeNull();
+    expect(visibleTestNote('   ', true)).toBeNull();
   });
 });
 
