@@ -29,6 +29,7 @@ export default function OnboardingScreen({ navigation }: Props) {
   const [km, setKm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [skipBusy, setSkipBusy] = useState(false);
 
   async function handleDone() {
     setError(null);
@@ -75,8 +76,37 @@ export default function OnboardingScreen({ navigation }: Props) {
     }
   }
 
-  function handleSkip() {
-    navigation.replace('Main');
+  /**
+   * Overslaan moet het profiel ook echt als onboarded markeren. De navigator
+   * toont Onboarding zolang `onboarded_at` leeg is; alleen naar Main navigeren
+   * zou daarom meteen weer naar dit scherm terugvallen. Naam en scooter kun je
+   * later invullen via je account.
+   */
+  async function handleSkip() {
+    setError(null);
+    setSkipBusy(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Niet ingelogd');
+
+      // .select() maakt een ontbrekend profiel zichtbaar als fout in plaats van
+      // als een stille no-op.
+      const { error: pErr } = await supabase
+        .from('profiles')
+        .update({ onboarded_at: new Date().toISOString() })
+        .eq('user_id', userData.user.id)
+        .select('user_id')
+        .single();
+      if (pErr) throw pErr;
+
+      // De navigator wisselt zelf naar Main zodra het profiel onboarded is;
+      // hier navigeren zou naar een scherm gaan dat nog niet in de stack staat.
+      await refreshProfile();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Overslaan mislukt. Probeer het opnieuw.');
+    } finally {
+      setSkipBusy(false);
+    }
   }
 
   return (
@@ -114,8 +144,20 @@ export default function OnboardingScreen({ navigation }: Props) {
           <Input label="Kilometerstand (mag leeg)" value={km} onChangeText={setKm} keyboardType="number-pad" placeholder="12450" />
 
           {error ? <ErrorText>{error}</ErrorText> : null}
-          <Button label="Ga naar FIX50" onPress={handleDone} loading={busy} style={{ marginTop: spacing.m }} />
-          <Button label="Later invullen" variant="ghost" onPress={handleSkip} />
+          <Button
+            label="Ga naar FIX50"
+            onPress={handleDone}
+            loading={busy}
+            disabled={skipBusy}
+            style={{ marginTop: spacing.m }}
+          />
+          <Button
+            label="Later invullen"
+            variant="ghost"
+            onPress={handleSkip}
+            loading={skipBusy}
+            disabled={busy}
+          />
         </Card>
       </ScrollView>
     </SafeAreaView>
