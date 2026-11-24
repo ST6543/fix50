@@ -593,17 +593,19 @@ export default function AfstelScreen({ embedded = false }: { embedded?: boolean 
     }
     setJetLogBusy(true);
     try {
-      for (const row of rows) {
-        await tuningService.addChange({
-          scooterId: activeScooter.id,
-          setupId: activeSetupId,
+      // Eén insert met één groeps-id: de regels van deze wissel horen
+      // expliciet bij elkaar, ook als ze later buiten een tijdvenster vallen.
+      await tuningService.addChanges({
+        scooterId: activeScooter.id,
+        setupId: activeSetupId,
+        rows: rows.map((row) => ({
           part: row.part,
           oldValue: row.oldValue,
           newValue: row.newValue,
           result: row.result,
           notes: row.notes,
-        });
-      }
+        })),
+      });
       setJetBaseline(jetConfig);
       setJetTestNote('');
       const list = await tuningService.listChanges(activeScooter.id);

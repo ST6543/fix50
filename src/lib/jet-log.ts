@@ -33,7 +33,11 @@ export interface JetChangeRow {
 
 export const NO_TEST_RESULT = 'Nog geen testresultaat — na de testrit bougiekleur of topsnelheid invullen.';
 
-/** Rijen van dezelfde wissel worden kort na elkaar weggeschreven; dit venster houdt ze bij elkaar. */
+/**
+ * Fallback voor oude rijen zonder `group_id`: die zijn vroeger kort na elkaar
+ * weggeschreven, dus dit venster houdt ze alsnog bij elkaar. Nieuwe wissels
+ * gebruiken het expliciete groeps-id en zijn hier niet van afhankelijk.
+ */
 export const JET_BATCH_WINDOW_MS = 5000;
 
 /**
@@ -106,12 +110,37 @@ export interface JetChangeLike {
   part: string;
   changed_at: string;
   run_id?: string | null;
+  /** Expliciet groeps-id van de wissel; ontbreekt bij oude rijen. */
+  group_id?: string | null;
 }
 
 /**
- * Groepeert logregels tot wissels. Regels van dezelfde wissel zijn kort na
- * elkaar weggeschreven en horen bij elkaar; nieuwste wissel eerst.
- * Alleen sproeierregels doen mee, net als in de rest van het logblok.
+ * Nieuw groeps-id voor één sproeierwissel. `crypto.randomUUID` bestaat niet in
+ * elke Hermes-runtime, dus er is een kleine RFC 4122-fallback. Het id is geen
+ * geheim; het hoeft alleen uniek te zijn.
+ */
+export function newGroupId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+
+  const hex = '0123456789abcdef';
+  let out = '';
+  for (let i = 0; i < 36; i += 1) {
+    if (i === 8 || i === 13 || i === 18 || i === 23) out += '-';
+    else if (i === 14) out += '4';
+    else {
+      const r = Math.floor(Math.random() * 16);
+      out += i === 19 ? hex[(r & 0x3) | 0x8] : hex[r];
+    }
+  }
+  return out;
+}
+
+/**
+ * Groepeert logregels tot wissels; nieuwste wissel eerst. Regels met hetzelfde
+ * `group_id` horen bij elkaar, ongeacht hun tijdstip. Alleen oude rijen zonder
+ * groeps-id vallen terug op het oude tijdvenster. Alleen sproeierregels doen
+ * mee, net als in de rest van het logblok.
  */
 export function groupJetChanges<T extends JetChangeLike>(changes: T[]): T[][] {
   const rows = changes
@@ -120,14 +149,37 @@ export function groupJetChanges<T extends JetChangeLike>(changes: T[]): T[][] {
     .sort((a, b) => (Number.isFinite(b.at) ? b.at : 0) - (Number.isFinite(a.at) ? a.at : 0));
 
   const groups: T[][] = [];
+  const byGroupId = new Map<string, T[]>();
+  // Alleen oude rijen (zonder group_id) mogen op tijd aan elkaar plakken.
+  let legacyGroup: T[] | null = null;
   let anchor: number | null = null;
+
   for (const { row, at } of rows) {
-    if (anchor === null || !Number.isFinite(at) || anchor - at > JET_BATCH_WINDOW_MS) {
-      groups.push([row]);
-      anchor = Number.isFinite(at) ? at : null;
+    const groupId = row.group_id;
+    if (groupId) {
+      const existing = byGroupId.get(groupId);
+      if (existing) {
+        existing.push(row);
+        continue;
+      }
+      const group = [row];
+      byGroupId.set(groupId, group);
+      groups.push(group);
+      legacyGroup = null;
+      anchor = null;
       continue;
     }
-    groups[groups.length - 1]!.push(row);
+
+    const withinWindow =
+      legacyGroup !== null && anchor !== null && Number.isFinite(at) && anchor - at <= JET_BATCH_WINDOW_MS;
+    if (withinWindow) {
+      legacyGroup!.push(row);
+      continue;
+    }
+
+    legacyGroup = [row];
+    groups.push(legacyGroup);
+    anchor = Number.isFinite(at) ? at : null;
   }
   return groups;
 }

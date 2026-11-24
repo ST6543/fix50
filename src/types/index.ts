@@ -209,6 +209,8 @@ export interface TuningChange {
   setup_id: UUID | null;
   /** GPS-test als testresultaat; null = nog geen meting aan deze wissel gekoppeld. */
   run_id: UUID | null;
+  /** Alle regels van dezelfde sproeierwissel delen dit id; null = oude rij zonder groeps-id. */
+  group_id: UUID | null;
   changed_at: string;
   km_at_change: number | null;
   part: string;

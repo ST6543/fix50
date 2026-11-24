@@ -2,7 +2,7 @@
 import { query } from './api';
 import { supabase } from '@/lib/supabase';
 import type { TuningChange, TuningSetup, UUID } from '@/types';
-import { JET_PART_LABELS } from '@/lib/jet-log';
+import { JET_PART_LABELS, newGroupId } from '@/lib/jet-log';
 
 export async function listSetups(scooterId: UUID): Promise<TuningSetup[]> {
   return query<TuningSetup[]>(
@@ -127,6 +127,7 @@ export async function restoreChanges(rows: TuningChange[]): Promise<void> {
     scooter_id: row.scooter_id,
     setup_id: row.setup_id ?? null,
     run_id: row.run_id ?? null,
+    group_id: row.group_id ?? null,
     changed_at: row.changed_at,
     km_at_change: row.km_at_change ?? null,
     part: row.part,
@@ -134,6 +135,49 @@ export async function restoreChanges(rows: TuningChange[]): Promise<void> {
     new_value: row.new_value ?? null,
     result: row.result ?? null,
     notes: row.notes ?? null,
+  }));
+  await query<void>(() => supabase.from('tuning_changes').insert(payload));
+}
+
+export interface NewChangeRow {
+  part: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  result?: string | null;
+  notes?: string | null;
+}
+
+/**
+ * Logt de regels van één wissel in één insert, met hetzelfde groeps-id en
+ * tijdstip. Zo horen ze ook na een herstart expliciet bij elkaar, zonder dat
+ * een tijdvenster hoeft te raden.
+ */
+export async function addChanges(args: {
+  scooterId: UUID;
+  setupId?: UUID | null;
+  rows: NewChangeRow[];
+  kmAtChange?: number | null;
+  /** Hergebruik een bestaand groeps-id; standaard komt er een nieuwe. */
+  groupId?: UUID | null;
+}): Promise<void> {
+  if (args.rows.length === 0) return;
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) throw new Error('Niet ingelogd');
+
+  const groupId = args.groupId ?? newGroupId();
+  const changedAt = new Date().toISOString();
+  const payload = args.rows.map((row) => ({
+    user_id: user.user!.id,
+    scooter_id: args.scooterId,
+    setup_id: args.setupId ?? null,
+    group_id: groupId,
+    part: row.part,
+    old_value: row.oldValue ?? null,
+    new_value: row.newValue ?? null,
+    result: row.result ?? null,
+    notes: row.notes ?? null,
+    km_at_change: args.kmAtChange ?? null,
+    changed_at: changedAt,
   }));
   await query<void>(() => supabase.from('tuning_changes').insert(payload));
 }
@@ -148,20 +192,18 @@ export async function addChange(args: {
   notes?: string | null;
   kmAtChange?: number | null;
 }): Promise<void> {
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) throw new Error('Niet ingelogd');
-  await query<void>(() =>
-    supabase.from('tuning_changes').insert({
-      user_id: user.user!.id,
-      scooter_id: args.scooterId,
-      setup_id: args.setupId ?? null,
-      part: args.part,
-      old_value: args.oldValue ?? null,
-      new_value: args.newValue ?? null,
-      result: args.result ?? null,
-      notes: args.notes ?? null,
-      km_at_change: args.kmAtChange ?? null,
-      changed_at: new Date().toISOString(),
-    }),
-  );
+  await addChanges({
+    scooterId: args.scooterId,
+    setupId: args.setupId,
+    kmAtChange: args.kmAtChange,
+    rows: [
+      {
+        part: args.part,
+        oldValue: args.oldValue,
+        newValue: args.newValue,
+        result: args.result,
+        notes: args.notes,
+      },
+    ],
+  });
 }

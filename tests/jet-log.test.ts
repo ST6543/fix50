@@ -21,6 +21,7 @@ import {
   jetUndoNotice,
   measuredResultLine,
   mixtureLine,
+  newGroupId,
   nextStepFor,
   NO_TEST_RESULT,
   parseJetValue,
@@ -315,6 +316,58 @@ describe('groupJetChanges', () => {
 
   it('geeft een lege lijst als er niets te groeperen is', () => {
     expect(groupJetChanges([])).toEqual([]);
+  });
+});
+
+describe('groupJetChanges met group_id', () => {
+  const row = (id: string, part: string, changed_at: string, group_id: string | null = null) => ({
+    id,
+    part,
+    changed_at,
+    group_id,
+    old_value: null,
+    new_value: null,
+  });
+
+  it('houdt regels met hetzelfde groeps-id bij elkaar, ook ver buiten het tijdvenster', () => {
+    const groups = groupJetChanges([
+      row('b', 'Naaldclip', '2026-11-19T12:00:00.000Z', 'groep-1'),
+      row('a', 'Hoofdsproeier', '2026-11-19T10:00:00.000Z', 'groep-1'),
+    ]);
+    expect(groups.map((g) => g.map((r) => r.id))).toEqual([['b', 'a']]);
+  });
+
+  it('voegt verschillende groepen niet samen binnen het tijdvenster', () => {
+    const groups = groupJetChanges([
+      row('b', 'Naaldclip', '2026-11-19T10:00:00.100Z', 'groep-2'),
+      row('a', 'Hoofdsproeier', '2026-11-19T10:00:00.000Z', 'groep-1'),
+    ]);
+    expect(groups.map((g) => g.map((r) => r.id))).toEqual([['b'], ['a']]);
+  });
+
+  it('groepeert oude rijen zonder groeps-id nog op tijd', () => {
+    const late = '2026-11-19T10:05:00.000Z';
+    const binnen = new Date(Date.parse(late) - JET_BATCH_WINDOW_MS + 1).toISOString();
+    expect(groupJetChanges([row('a', 'Hoofdsproeier', late), row('b', 'Naaldclip', binnen)])).toHaveLength(1);
+  });
+
+  it('trekt een oude rij niet in een nieuwe groep en andersom', () => {
+    const late = '2026-11-19T10:05:00.000Z';
+    const binnen = new Date(Date.parse(late) - 1000).toISOString();
+    const groups = groupJetChanges([
+      row('nieuw', 'Naaldclip', late, 'groep-1'),
+      row('oud', 'Hoofdsproeier', binnen),
+    ]);
+    expect(groups.map((g) => g.map((r) => r.id))).toEqual([['nieuw'], ['oud']]);
+  });
+});
+
+describe('newGroupId', () => {
+  it('geeft een geldig uuid dat per wissel verschilt', () => {
+    const a = newGroupId();
+    const b = newGroupId();
+    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(a).not.toBe(b);
   });
 });
 
