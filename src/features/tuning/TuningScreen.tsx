@@ -62,27 +62,33 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.sectionEyebrow}>TUNINGWERKPLAATS</Text>
         <View style={styles.navRow}>
-          <Button
-            label="Setup configureren"
-            onPress={() => navigation.navigate('SetupDetail', {})}
-            style={styles.navBtn}
-          />
+          <Button label="Nieuwe setup" onPress={() => navigation.navigate('SetupDetail', {})} style={styles.navBtn} />
           <Button label="Carburateur afstellen" onPress={() => navigation.navigate('Afstel')} style={styles.navBtn} />
         </View>
         <View style={styles.navRow}>
           <Button label="Vertanding optimaliseren" onPress={() => navigation.navigate('Gearing')} style={styles.navBtn} />
           <Button
-            label="Testritten en metingen"
-            onPress={() => navigation.navigate('PerformanceRun')}
+            label="Metingen"
+            variant="secondary"
+            onPress={() => navigation.navigate('PerformanceHistory')}
             style={styles.navBtn}
           />
         </View>
         <View style={styles.navRow}>
           <Button
             label="Setup vergelijken"
+            variant="secondary"
             onPress={() => navigation.navigate('SetupComparison')}
             style={styles.navBtn}
           />
+          <Button
+            label="Tuninggeschiedenis"
+            variant="secondary"
+            onPress={() => navigation.navigate('TuningHistory')}
+            style={styles.navBtn}
+          />
+        </View>
+        <View style={styles.navRow}>
           <Button
             label="Motordatabase"
             variant="secondary"
@@ -152,9 +158,7 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
           <EmptyState
             icon={SlidersIcon}
             title="Nog geen setups opgeslagen"
-            subtitle='Sla varianten op zoals "Origineel", "Sport" of "Test setup".'
-            actionLabel="Nieuwe setup"
-            onAction={() => navigation.navigate('SetupDetail', {})}
+            subtitle='Sla varianten op zoals "Origineel", "Sport" of "Test setup" via "Nieuwe setup".'
           />
         ) : (
           setups.map((s, si) => (
@@ -177,11 +181,6 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
           ))
         )}
 
-        <View style={styles.actionsRow}>
-          <Button label="Nieuwe setup" onPress={() => navigation.navigate('SetupDetail', {})} style={styles.actionBtn} />
-          <Button label="Vergelijken" variant="secondary" onPress={() => navigation.navigate('SetupComparison')} style={styles.actionBtn} />
-        </View>
-        <Button label="Tuninggeschiedenis" variant="secondary" onPress={() => navigation.navigate('TuningHistory')} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -209,6 +208,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   navBtn: { flex: 1 },
-  actionsRow: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.s, marginBottom: spacing.s },
-  actionBtn: { flex: 1 },
 });
