@@ -70,17 +70,6 @@ export function jetChoices<T extends JetChangeLike>(changes: T[], linkedKey?: st
   );
 }
 
-/**
- * Zoekt de wissel met deze id in het hele log. De id komt uit de navigatie en
- * is de bron van waarheid: staat de wissel niet in de keuzelijst (bijv. omdat
- * hij al gemeten is of buiten de geladen regels valt), dan vinden we hem hier
- * alsnog. null = de wissel staat niet (meer) in het log.
- */
-export function findJetGroup<T extends JetChangeLike>(changes: T[], key?: string | null): T[] | null {
-  if (!key) return null;
-  return groupJetChanges(changes).find((g) => g[0]?.id === key) ?? null;
-}
-
 /** Korte regel voor een wissel in een keuzelijst, bijv. "Hoofdsproeier 94 → 96". */
 export function jetGroupLabel<T extends { part: string; old_value?: string | null; new_value?: string | null }>(
   group: T[],

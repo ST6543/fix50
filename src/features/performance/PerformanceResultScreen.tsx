@@ -3,7 +3,7 @@ import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import type { AppNav } from '@/navigation/types';
+import type { AppNav, RootStackParamList } from '@/navigation/types';
 
 import { Badge, Button, Card, EmptyState, Loading, SectionTitle } from '@/components/ui';
 import { SpeedChart } from '@/components/charts';
@@ -17,10 +17,9 @@ import { formatDateTime, formatDistance, formatSeconds, formatSpeed } from '@/li
 import { colors, spacing, typography } from '@/theme';
 import type { PerformanceRun, TuningChange } from '@/types';
 
-type RouteParams = { PerformanceResult: { runId: string; linkIssue?: 'niet-gevonden' | 'opslaan-mislukt' } };
-
 export default function PerformanceResultScreen() {
-  const route = useRoute<RouteProp<RouteParams, 'PerformanceResult'>>();
+  // De route-params komen uit het centrale navigatietype; geen tweede kopie.
+  const route = useRoute<RouteProp<RootStackParamList, 'PerformanceResult'>>();
   const navigation = useNavigation<AppNav>();
   const { activeScooter } = useScooters();
   const [run, setRun] = useState<PerformanceRun | null>(null);

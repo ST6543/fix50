@@ -1,5 +1,5 @@
 /** Live performance-meting: minimale UI tijdens het rijden — grote cijfers. */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -16,7 +16,7 @@ import {
   getActiveSetup,
   listChanges,
 } from '@/services/tuning';
-import { findJetGroup, jetChoices, jetGroupHasRun, jetGroupLabel, JET_RETEST_WARNING } from '@/lib/jet-log';
+import { jetChoices, jetGroupHasRun, jetGroupLabel, JET_RETEST_WARNING } from '@/lib/jet-log';
 import type { TuningChange, TuningSetup, UUID } from '@/types';
 import { performanceRunSchema } from '@/lib/validation';
 import { colors, fonts, spacing, typography } from '@/theme';
@@ -38,13 +38,10 @@ export default function PerformanceRunScreen() {
   // Actieve tuningsetup (voor koppeling van de meting aan de afstelling).
   const [activeSetup, setActiveSetup] = useState<TuningSetup | null>(null);
   const [setupId, setSetupId] = useState<UUID | null>(null);
-  // Sproeierwissels om te testen (wachtend, plus een gekozen wissel die al
-  // een meting heeft), en de gekozen wissel.
-  const [choices, setChoices] = useState<TuningChange[][]>([]);
-  // Alle geladen logregels, om de gekozen wissel ook buiten de chips te vinden.
-  const [changes, setChanges] = useState<TuningChange[]>([]);
-  // Alleen als het log echt geladen is, mogen we zeggen dat een wissel er niet in staat.
-  const [changesLoaded, setChangesLoaded] = useState(false);
+  // Sproeierwissels om te testen: de wachtende wissels plus de wissel waar je
+  // vandaan kwam, ook als die al een meting heeft. null = nog niet geladen;
+  // een lege lijst betekent echt dat er niets te kiezen is.
+  const [choices, setChoices] = useState<TuningChange[][] | null>(null);
   // Geen keuze = geen koppeling. Alleen "Test deze wissel" vult een wissel in.
   const [jetKey, setJetKey] = useState<string | null>(linkedKey);
 
@@ -85,32 +82,40 @@ export default function PerformanceRunScreen() {
   // vult er een in, dus er wordt niets op tijd of op volgorde geraden.
   useEffect(() => {
     let cancelled = false;
-    setChoices([]);
-    setChanges([]);
-    setChangesLoaded(false);
+    setChoices(null);
     setJetKey(linkedKey);
-    if (!activeScooter) return;
+    if (!activeScooter) {
+      setChoices([]);
+      return;
+    }
     listChanges(activeScooter.id)
       .then((rows) => {
-        if (cancelled) return;
-        setChanges(rows);
-        setChangesLoaded(true);
-        setChoices(jetChoices(rows, linkedKey));
+        if (!cancelled) setChoices(jetChoices(rows, linkedKey));
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setChoices([]);
+      });
     return () => {
       cancelled = true;
     };
   }, [activeScooter?.id, linkedKey]);
 
-  // De gekozen wissel komt uit de navigatie (bron van waarheid) en wordt in
-  // het hele log opgezocht, niet alleen in de chips. Zo blijft een wissel die
-  // niet in de keuzelijst staat toch te koppelen.
-  const selectedJet = useMemo(() => findJetGroup(changes, jetKey), [changes, jetKey]);
+  // De keuzelijst bevat ook de wissel uit de navigatie (ook als die al een
+  // meting heeft), dus de key opzoeken in deze lijst is genoeg.
+  const selectedJet = choices?.find((group) => group[0]?.id === jetKey) ?? null;
   // Gekozen wissel die niet (meer) in het log staat: nooit stil ongekoppeld opslaan.
-  const linkMissing = !!jetKey && changesLoaded && !selectedJet;
+  const linkMissing = !!jetKey && choices !== null && !selectedJet;
   // Deze wissel is al getest: een nieuwe meting vervangt de koppeling.
   const replacesExisting = jetGroupHasRun(selectedJet);
+  const choiceCount = choices?.length ?? 0;
+  // Eén uitleg onder de keuze, in plaats van een geneste ternary in de JSX.
+  const pickHint = linkMissing
+    ? 'Deze sproeierwissel staat niet in je geladen log.'
+    : selectedJet
+      ? `Top en 0–50 van deze meting komen als resultaat bij: ${jetGroupLabel(selectedJet)}.`
+      : choiceCount > 0
+        ? 'Geen wissel gekozen — deze meting wordt niet aan een sproeierwissel gekoppeld.'
+        : 'Geen sproeierwissel wacht op een meting. Log eerst een wissel in de Afstelhulp; die kun je daar ook direct testen.';
 
   async function prepare() {
     setPhase('gps');
@@ -251,10 +256,9 @@ export default function PerformanceRunScreen() {
           started_at: new Date(Date.now() - metrics.durationS * 1000).toISOString(),
         },
       });
-      // De wissel uit de navigatie is leidend: ook als hij niet in de
-      // keuzelijst staat, proberen we hem te koppelen. De service zegt hoeveel
-      // regels echt gekoppeld zijn, zodat een verdwenen wissel niet stil
-      // ongekoppeld blijft.
+      // De key uit de navigatie is leidend. Staat de wissel niet meer in het
+      // log, dan proberen we hem alsnog te koppelen; de service zegt hoeveel
+      // regels echt gekoppeld zijn, zodat niets stil ongekoppeld blijft.
       let linkIssue: 'niet-gevonden' | 'opslaan-mislukt' | undefined;
       if (jetKey) {
         try {
@@ -321,7 +325,7 @@ export default function PerformanceRunScreen() {
           </Card>
           <Card>
             <Text style={styles.jetPickLabel}>DEZE METING TEST</Text>
-            {choices.length > 0 ? (
+            {choices && choices.length > 0 ? (
               <ChipRow>
                 <Chip label="Geen wissel" active={jetKey === null} onPress={() => setJetKey(null)} />
                 {choices.slice(0, 6).map((group) => (
@@ -334,22 +338,8 @@ export default function PerformanceRunScreen() {
                 ))}
               </ChipRow>
             ) : null}
-            <Text style={styles.jetPickHint}>
-              {linkMissing
-                ? 'Deze sproeierwissel staat niet in je geladen log.'
-                : selectedJet
-                  ? `Top en 0–50 van deze meting komen als resultaat bij: ${jetGroupLabel(selectedJet)}.`
-                  : choices.length > 0
-                    ? 'Geen wissel gekozen — deze meting wordt niet aan een sproeierwissel gekoppeld.'
-                    : 'Geen sproeierwissel wacht op een meting. Log eerst een wissel in de Afstelhulp; die kun je daar ook direct testen.'}
-            </Text>
+            <Text style={styles.jetPickHint}>{pickHint}</Text>
             {replacesExisting ? <Text style={styles.jetReplaceWarn}>{JET_RETEST_WARNING}</Text> : null}
-            {linkMissing ? (
-              <Text style={styles.jetReplaceWarn}>
-                Let op: bij opslaan controleren we of deze wissel nog bestaat. Lukt koppelen niet, dan melden we dat op
-                het resultaat.
-              </Text>
-            ) : null}
           </Card>
           <Button label="START TEST" onPress={start} disabled={phase === 'saving'} />
           <Button label="Opslaan & stoppen" variant="secondary" onPress={stopAndSave} disabled={phase === 'saving'} />

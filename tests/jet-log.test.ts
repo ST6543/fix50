@@ -9,7 +9,6 @@ import {
   groupHistoryRows,
   groupJetChanges,
   diffJets,
-  findJetGroup,
   formatJetValue,
   isJetChangePart,
   jetKeyForPart,
@@ -259,18 +258,6 @@ describe('jetChoices / jetGroupHasRun', () => {
     expect(jetGroupHasRun(null)).toBe(false);
   });
 
-  it('vindt een gekozen wissel ook buiten de keuzelijst', () => {
-    // De id uit de navigatie is leidend: een wissel die al een meting heeft
-    // staat niet in de keuzelijst, maar moet wel te koppelen zijn.
-    expect(findJetGroup(rows, 'gemeten')?.map((r) => r.id)).toEqual(['gemeten']);
-    // De sleutel is de id van de nieuwste regel van de wissel.
-    expect(findJetGroup(rows, 'wacht-b')?.map((r) => r.id)).toEqual(['wacht-b', 'wacht-a']);
-    expect(findJetGroup(rows, 'wacht-a')).toBeNull();
-    // Onbekend of geen keuze: niets om te koppelen.
-    expect(findJetGroup(rows, 'bestaat-niet')).toBeNull();
-    expect(findJetGroup(rows, null)).toBeNull();
-    expect(findJetGroup([], 'gemeten')).toBeNull();
-  });
 });
 
 describe('jetGroupLabel / jetRunLinkLine', () => {
