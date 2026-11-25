@@ -20,7 +20,6 @@ import {
   jetUndoNotice,
   measuredResultLine,
   mixtureLine,
-  newGroupId,
   nextStepFor,
   NO_TEST_RESULT,
   parseJetValue,
@@ -346,15 +345,6 @@ describe('groupJetChanges met group_id', () => {
       row('oud', 'Hoofdsproeier', binnen),
     ]);
     expect(groups.map((g) => g.map((r) => r.id))).toEqual([['nieuw'], ['oud']]);
-  });
-});
-
-describe('newGroupId', () => {
-  it('geeft een geldig uuid dat per wissel verschilt', () => {
-    const a = newGroupId();
-    const b = newGroupId();
-    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    expect(a).not.toBe(b);
   });
 });
 

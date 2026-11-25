@@ -104,28 +104,6 @@ export interface JetChangeLike {
 }
 
 /**
- * Nieuw groeps-id voor één sproeierwissel. `crypto.randomUUID` bestaat niet in
- * elke Hermes-runtime, dus er is een kleine RFC 4122-fallback. Het id is geen
- * geheim; het hoeft alleen uniek te zijn.
- */
-export function newGroupId(): string {
-  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
-
-  const hex = '0123456789abcdef';
-  let out = '';
-  for (let i = 0; i < 36; i += 1) {
-    if (i === 8 || i === 13 || i === 18 || i === 23) out += '-';
-    else if (i === 14) out += '4';
-    else {
-      const r = Math.floor(Math.random() * 16);
-      out += i === 19 ? hex[(r & 0x3) | 0x8] : hex[r];
-    }
-  }
-  return out;
-}
-
-/**
  * Groepeert logregels tot wissels; nieuwste wissel eerst. Regels met hetzelfde
  * `group_id` horen bij elkaar, ongeacht hun tijdstip. Alleen oude rijen zonder
  * groeps-id vallen terug op het oude tijdvenster. Alleen sproeierregels doen

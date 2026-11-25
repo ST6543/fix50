@@ -1,8 +1,10 @@
 /** Tuning-service: setups, wijzigingen en vergelijken. */
+import { randomUUID } from 'expo-crypto';
+
 import { query } from './api';
 import { supabase } from '@/lib/supabase';
 import type { TuningChange, TuningSetup, UUID } from '@/types';
-import { JET_PART_LABELS, newGroupId } from '@/lib/jet-log';
+import { JET_PART_LABELS } from '@/lib/jet-log';
 
 export async function listSetups(scooterId: UUID): Promise<TuningSetup[]> {
   return query<TuningSetup[]>(
@@ -164,7 +166,7 @@ export async function addChanges(args: {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) throw new Error('Niet ingelogd');
 
-  const groupId = args.groupId ?? newGroupId();
+  const groupId = args.groupId ?? randomUUID();
   const changedAt = new Date().toISOString();
   const payload = args.rows.map((row) => ({
     user_id: user.user!.id,
