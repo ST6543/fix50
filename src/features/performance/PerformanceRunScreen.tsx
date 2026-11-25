@@ -1,9 +1,9 @@
 /** Live performance-meting: minimale UI tijdens het rijden — grote cijfers. */
-import React, { useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { AppNav, RootStackParamList } from '@/navigation/types';
 
 import { Button, Card, Chip, ChipRow, Loading } from '@/components/ui';
@@ -17,6 +17,7 @@ import {
   listChanges,
 } from '@/services/tuning';
 import { jetChoices, jetGroupHasRun, jetGroupLabel, JET_RETEST_WARNING } from '@/lib/jet-log';
+import { supabase } from '@/lib/supabase';
 import type { TuningChange, TuningSetup, UUID } from '@/types';
 import { performanceRunSchema } from '@/lib/validation';
 import { colors, fonts, spacing, typography } from '@/theme';
@@ -78,27 +79,75 @@ export default function PerformanceRunScreen() {
     };
   }, [activeScooter?.id]);
 
-  // Welke sproeierwissel test je? Standaard geen: alleen "Test deze wissel"
-  // vult er een in, dus er wordt niets op tijd of op volgorde geraden.
-  useEffect(() => {
-    let cancelled = false;
-    setChoices(null);
-    setJetKey(linkedKey);
+  // Wissels opnieuw inlezen. De meter kan openstaan terwijl een wissel elders
+  // verdwijnt (ander scherm of ander device); dan moet de waarschuwing meteen
+  // verschijnen in plaats van pas bij het opslaan.
+  const refreshChoices = useCallback(async () => {
     if (!activeScooter) {
       setChoices([]);
       return;
     }
-    listChanges(activeScooter.id)
-      .then((rows) => {
-        if (!cancelled) setChoices(jetChoices(rows, linkedKey));
-      })
-      .catch(() => {
-        if (!cancelled) setChoices([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const rows = await listChanges(activeScooter.id);
+      setChoices(jetChoices(rows, linkedKey));
+    } catch {
+      // Netwerkfout: de laatst geladen lijst blijft staan in plaats van leeg te lopen.
+    }
   }, [activeScooter?.id, linkedKey]);
+
+  // Welke sproeierwissel test je? Standaard geen: alleen "Test deze wissel"
+  // vult er een in, dus er wordt niets op tijd of op volgorde geraden.
+  useEffect(() => {
+    setChoices(null);
+    setJetKey(linkedKey);
+    void refreshChoices();
+  }, [refreshChoices]);
+
+  // Bij terugkeer op dit scherm verversen (de eerste focus is al door het
+  // laadeffect hierboven gedekt).
+  const firstFocusRef = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocusRef.current) {
+        firstFocusRef.current = false;
+        return;
+      }
+      void refreshChoices();
+    }, [refreshChoices]),
+  );
+
+  // Terug uit de achtergrond: de schermfocus verandert dan niet, dus apart verversen.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshChoices();
+    });
+    return () => sub.remove();
+  }, [refreshChoices]);
+
+  // En meteen bij een wijziging in de log (toevoegen, koppelen of verwijderen),
+  // ook als die op een ander device gebeurt.
+  useEffect(() => {
+    const scooterId = activeScooter?.id;
+    if (!scooterId) return;
+    const channel = supabase
+      .channel(`tuning-changes:${scooterId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tuning_changes',
+          filter: `scooter_id=eq.${scooterId}`,
+        },
+        () => {
+          void refreshChoices();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeScooter?.id, refreshChoices]);
 
   // De keuzelijst bevat ook de wissel uit de navigatie (ook als die al een
   // meting heeft), dus de key opzoeken in deze lijst is genoeg.
