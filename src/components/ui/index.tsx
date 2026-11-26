@@ -17,7 +17,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { PressableScale } from '@/components/motion';
 import { ArrowRightIcon } from '@/components/icons';
-import { colors, fonts, radii, spacing, typography } from '@/theme';
+import { colors, fonts, layout, radii, shadows, spacing, typography } from '@/theme';
 import type { IconProps } from '@/components/icons';
 
 // ── Eyebrow — uppercase micro-label (Stitch-signatuur) ───────
@@ -62,16 +62,18 @@ export function Button({
     variant === 'primary'
       ? colors.primary
       : variant === 'danger'
-        ? colors.danger
+        ? 'rgba(239,68,68,0.10)'
         : variant === 'secondary'
           ? colors.surfaceAlt
           : 'transparent';
   const fg =
-    variant === 'primary' || variant === 'danger'
+    variant === 'primary'
       ? colors.onPrimary
-      : variant === 'secondary'
-        ? colors.text
-        : colors.textMuted;
+      : variant === 'danger'
+        ? colors.danger
+        : variant === 'secondary'
+          ? colors.text
+          : colors.textMuted;
   return (
     <PressableScale
       accessibilityLabel={label}
@@ -81,7 +83,8 @@ export function Button({
       style={[
         styles.button,
         { backgroundColor: bg, opacity: disabled ? 0.45 : 1 },
-        variant === 'secondary' && styles.buttonSecondary,
+        variant === 'primary' && !disabled && shadows.glow,
+        (variant === 'secondary' || variant === 'danger') && styles.buttonTinted,
         style,
       ]}
     >
@@ -110,11 +113,17 @@ export function Card({
   if (onPress) {
     return (
       <PressableScale onPress={onPress} style={[styles.card, style]}>
+        <View pointerEvents="none" style={styles.cardGloss} />
         {children}
       </PressableScale>
     );
   }
-  return <View style={[styles.card, style]}>{children}</View>;
+  return (
+    <View style={[styles.card, style]}>
+      <View pointerEvents="none" style={styles.cardGloss} />
+      {children}
+    </View>
+  );
 }
 
 // ── IconTile — getint vierkant met border (Stitch icon-tiles) ──
@@ -541,15 +550,31 @@ export function Input({
   label,
   error,
   hint,
+  onFocus,
+  onBlur,
   ...props
 }: TextInputProps & { label?: string; error?: string | null; hint?: string }) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.inputWrap}>
       {label ? <Text style={styles.inputLabel}>{label}</Text> : null}
       <TextInput
         placeholderTextColor={colors.textSubtle}
         {...props}
-        style={[styles.input, props.style, error ? { borderColor: colors.danger } : null]}
+        onFocus={(e) => {
+          setFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
+        style={[
+          styles.input,
+          props.style,
+          focused && styles.inputFocused,
+          error ? { borderColor: colors.danger } : null,
+        ]}
       />
       {hint && !error ? <Text style={styles.inputHint}>{hint}</Text> : null}
       {error ? <ErrorText>{error}</ErrorText> : null}
@@ -599,10 +624,20 @@ const badgeTones: Record<BadgeTone, { bg: string; fg: string; border: string }> 
   info: { bg: 'rgba(56,189,248,0.12)', fg: colors.info, border: 'rgba(56,189,248,0.3)' },
 };
 
-export function Badge({ label, tone = 'neutral' }: { label: string; tone?: BadgeTone }) {
+export function Badge({
+  label,
+  tone = 'neutral',
+  dot,
+}: {
+  label: string;
+  tone?: BadgeTone;
+  /** Klein gekleurd stipje vóór het label — status in één oogopslag. */
+  dot?: boolean;
+}) {
   const t = badgeTones[tone];
   return (
     <View style={[styles.badge, { backgroundColor: t.bg, borderColor: t.border }]}>
+      {dot ? <View style={[styles.badgeDot, { backgroundColor: t.fg }]} /> : null}
       <Text style={[styles.badgeLabel, { color: t.fg }]}>{label}</Text>
     </View>
   );
@@ -658,7 +693,52 @@ export function SectionTitle({ children, action }: { children: React.ReactNode; 
   return (
     <View style={[styles.sectionRow, !action && { justifyContent: 'flex-start' }]}>
       <Text style={typography.eyebrow}>{children}</Text>
+      {/* Dunne lijn ernaast geeft de sectiekop rust en richting. */}
+      {!action ? <View style={styles.sectionRule} /> : null}
       {action}
+    </View>
+  );
+}
+
+// ── SegmentSwitch — segmented control voor tabs binnen een scherm ──
+export type SegmentItem<T extends string> = {
+  key: T;
+  label: string;
+  icon?: (p: { size?: number; color?: string }) => React.ReactElement;
+};
+
+export function SegmentSwitch<T extends string>({
+  segments,
+  value,
+  onChange,
+  style,
+}: {
+  segments: SegmentItem<T>[];
+  value: T;
+  onChange: (key: T) => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[styles.segmentWrap, style]}>
+      {segments.map((s) => {
+        const active = s.key === value;
+        return (
+          <PressableScale
+            key={s.key}
+            accessibilityLabel={s.label}
+            accessibilityState={{ selected: active }}
+            onPress={() => onChange(s.key)}
+            style={[styles.segment, active && styles.segmentActive]}
+          >
+            <View style={styles.segmentInner}>
+              {s.icon ? s.icon({ size: 15, color: active ? colors.primary : colors.textMuted }) : null}
+              <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]} numberOfLines={1}>
+                {s.label}
+              </Text>
+            </View>
+          </PressableScale>
+        );
+      })}
     </View>
   );
 }
@@ -679,23 +759,34 @@ export function ChipRow({ children }: { children: React.ReactNode }) {
 const styles = StyleSheet.create({
   eyebrowBlock: { marginBottom: spacing.s },
   button: {
-    minHeight: 48,
+    minHeight: 50,
     borderRadius: radii.m,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.m,
   },
-  buttonSecondary: { borderWidth: 1, borderColor: colors.border },
+  buttonTinted: { borderWidth: 1, borderColor: colors.border },
   buttonInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   buttonIcon: { marginRight: spacing.s },
-  buttonLabel: { fontFamily: fonts.display, fontSize: 15, fontWeight: '600', letterSpacing: 0.2 },
+  buttonLabel: { fontFamily: fonts.display, fontSize: 15, fontWeight: '600', letterSpacing: 0.3 },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radii.m,
+    borderRadius: radii.l,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.l,
+    borderColor: colors.borderSoft,
+    padding: layout.cardPadding,
+    ...shadows.card,
+  },
+  /** Lichtlijn bovenaan de kaart: laat het vlak net opgetild lijken. */
+  cardGloss: {
+    position: 'absolute',
+    top: 0,
+    left: spacing.l,
+    right: spacing.l,
+    height: 1,
+    backgroundColor: colors.hairline,
+    borderRadius: 1,
   },
   stat: {
     flex: 1,
@@ -762,11 +853,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: fonts.body,
     paddingHorizontal: spacing.m,
-    minHeight: 48,
+    minHeight: 50,
     fontSize: 15,
   },
+  inputFocused: { borderColor: colors.primaryBorder, backgroundColor: colors.surface },
   chip: {
-    borderRadius: radii.m,
+    borderRadius: radii.pill,
     borderWidth: 1,
     paddingHorizontal: spacing.l,
     paddingVertical: spacing.s,
@@ -776,13 +868,17 @@ const styles = StyleSheet.create({
   },
   chipLabel: { fontFamily: fonts.bodySemiBold, fontSize: 14, fontWeight: '600' },
   badge: {
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: radii.pill,
     borderWidth: 1,
     paddingHorizontal: spacing.m,
-    paddingVertical: 3,
+    paddingVertical: 4,
     alignSelf: 'flex-start',
   },
-  badgeLabel: { fontFamily: fonts.display, fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
+  badgeDot: { width: 5, height: 5, borderRadius: 3 },
+  badgeLabel: { fontFamily: fonts.display, fontSize: 11.5, fontWeight: '600', letterSpacing: 0.4 },
   errorText: { color: colors.danger, fontFamily: fonts.body, fontSize: 13, marginTop: spacing.xs },
   empty: { alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.xl },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xxl },
@@ -790,8 +886,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: spacing.m,
     marginBottom: spacing.m,
   },
+  sectionRule: { flex: 1, height: 1, backgroundColor: colors.borderSoft },
+  segmentWrap: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    backgroundColor: colors.surface,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: radii.pill,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.m,
+  },
+  segmentActive: { backgroundColor: colors.primarySubtle, borderWidth: 1, borderColor: colors.primaryBorder },
+  segmentInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  segmentLabel: { fontFamily: fonts.display, fontSize: 13, fontWeight: '600', letterSpacing: 0.2, color: colors.textMuted },
+  segmentLabelActive: { color: colors.primary },
   chipRow: { paddingHorizontal: spacing.l, paddingVertical: spacing.s },
   slider: { marginTop: spacing.m },
   sliderHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.s },

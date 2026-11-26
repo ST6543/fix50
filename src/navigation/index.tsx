@@ -1,5 +1,6 @@
 /** Navigatie: auth-stack voor ingelogde gebruikers, daarna 3 icon-only tabs. */
 import React from 'react';
+import { View } from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -71,6 +72,13 @@ const TAB_ICONS: Record<string, (p: IconProps) => React.ReactElement> = {
   Garage: SlidersIcon,
 };
 
+/** Korte labels onder de iconen — de tabbladen zijn zonder tekst te raden. */
+const TAB_LABELS: Record<string, string> = {
+  Home: 'Home',
+  Werkplaats: 'Werkplaats',
+  Garage: 'Garage',
+};
+
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -79,24 +87,43 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.borderSoft,
-          height: 58,
-          paddingBottom: 7,
+          height: 66,
+          paddingBottom: 8,
           paddingTop: 8,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSubtle,
-        tabBarLabel: () => null,
-        tabBarShowLabel: false,
+        tabBarLabelStyle: {
+          fontFamily: fonts.display,
+          fontSize: 10.5,
+          fontWeight: '600',
+          letterSpacing: 0.3,
+        },
+        tabBarItemStyle: { paddingVertical: 0 },
         tabBarIcon: ({ focused }) => {
           const Icon = TAB_ICONS[route.name];
           if (!Icon) return null;
-          return <Icon size={23} color={focused ? colors.primary : colors.textSubtle} strokeWidth={focused ? 2.1 : 1.8} />;
+          // Actief tabblad krijgt een zachte oranje pil achter het icoon.
+          return (
+            <View
+              style={{
+                width: 44,
+                height: 28,
+                borderRadius: 14,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: focused ? colors.primarySubtle : 'transparent',
+              }}
+            >
+              <Icon size={21} color={focused ? colors.primary : colors.textSubtle} strokeWidth={focused ? 2.1 : 1.8} />
+            </View>
+          );
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Werkplaats" component={WorkshopScreen} />
-      <Tab.Screen name="Garage" component={GarageScreen} />
+      <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: TAB_LABELS.Home }} />
+      <Tab.Screen name="Werkplaats" component={WorkshopScreen} options={{ tabBarLabel: TAB_LABELS.Werkplaats }} />
+      <Tab.Screen name="Garage" component={GarageScreen} options={{ tabBarLabel: TAB_LABELS.Garage }} />
     </Tab.Navigator>
   );
 }
@@ -112,8 +139,10 @@ export default function AppNavigator() {
     <NavigationContainer theme={navTheme}>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
+          headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
+          headerTitleStyle: { fontFamily: fonts.display, fontSize: 17, fontWeight: '600' },
+          headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.background },
         }}
       >

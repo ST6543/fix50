@@ -6,14 +6,38 @@ import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import type { AppNav } from '@/navigation/types';
 
-import { Button, Card, SectionTitle } from '@/components/ui';
+import { Badge, Button, Card, SectionTitle } from '@/components/ui';
 import { BellIcon, CameraIcon, ChevronRightIcon, GearIcon, LockIcon, MotoIcon, UserIcon } from '@/components/icons';
 import { useAuth } from '@/hooks/useAuth';
 import { useScooters } from '@/hooks/useScooters';
 import * as scootersService from '@/services/scooters';
-import { colors, fonts, radii, spacing } from '@/theme';
+import { colors, fonts, radii, spacing, typography } from '@/theme';
+import type { Profile } from '@/types';
 
 type Nav = AppNav;
+
+const MONTHS = [
+  'januari',
+  'februari',
+  'maart',
+  'april',
+  'mei',
+  'juni',
+  'juli',
+  'augustus',
+  'september',
+  'oktober',
+  'november',
+  'december',
+];
+
+/** "Lid sinds maart 2025" op basis van het echte aanmaakmoment van het profiel. */
+function memberSince(profile: Profile | null): string | null {
+  if (!profile?.created_at) return null;
+  const d = new Date(profile.created_at);
+  if (Number.isNaN(d.getTime())) return null;
+  return `Lid sinds ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
 
 export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
@@ -85,19 +109,20 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Card>
+        {/* Persoonlijke kaart: foto, naam en de feiten die de app écht kent. */}
+        <Card style={styles.profileCard}>
           <Pressable
             accessibilityRole="imagebutton"
             accessibilityLabel="Profielfoto wijzigen"
             onPress={pickAvatarSource}
             disabled={photoBusy}
-            style={({ pressed }) => [styles.avatarWrap, pressed && { opacity: 0.8 }]}
+            style={({ pressed }) => [styles.avatarWrap, pressed && { opacity: 0.85 }]}
           >
             {profile?.avatar_url ? (
               <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} resizeMode="cover" />
             ) : (
               <View style={styles.avatar}>
-                <UserIcon size={26} color={colors.primary} />
+                <UserIcon size={34} color={colors.primary} />
               </View>
             )}
             <View style={styles.avatarCam}>
@@ -106,10 +131,18 @@ export default function ProfileScreen() {
           </Pressable>
           <Text style={styles.name}>{profile?.display_name ?? 'Scooterrijder'}</Text>
           <Text style={styles.email}>{session?.user?.email ?? ''}</Text>
+          <View style={styles.profileMeta}>
+            {activeScooter ? (
+              <Badge label={activeScooter.name} tone="info" dot />
+            ) : (
+              <Badge label="Nog geen scooter" tone="neutral" />
+            )}
+            {memberSince(profile) ? <Badge label={memberSince(profile) as string} tone="neutral" /> : null}
+          </View>
         </Card>
 
         <SectionTitle>Instellingen</SectionTitle>
-        <Card style={{ paddingVertical: spacing.s }}>
+        <Card style={styles.linksCard}>
           {links.map((link, i) => (
             <Pressable
               key={link.label}
@@ -117,12 +150,12 @@ export default function ProfileScreen() {
               onPress={() => navigation.navigate(link.route as never)}
               style={({ pressed }) => [styles.linkRow, i > 0 && styles.linkDivider, pressed && { opacity: 0.7 }]}
             >
-              <View style={styles.linkIcon}>{link.icon({ size: 20, color: colors.textMuted })}</View>
+              <View style={styles.linkIcon}>{link.icon({ size: 18, color: colors.textMuted })}</View>
               <View style={styles.linkText}>
                 <Text style={styles.linkLabel}>{link.label}</Text>
                 <Text style={styles.linkSub}>{link.sub}</Text>
               </View>
-              <ChevronRightIcon size={18} color={colors.textMuted} />
+              <ChevronRightIcon size={17} color={colors.textSubtle} />
             </Pressable>
           ))}
         </Card>
@@ -135,14 +168,22 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.l, paddingBottom: spacing.xxl },
+  content: {
+    padding: spacing.l,
+    paddingBottom: spacing.xxl,
+    gap: spacing.s,
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
+  },
+  profileCard: { alignItems: 'center', paddingVertical: spacing.xl },
   avatarWrap: { alignSelf: 'center', marginBottom: spacing.m },
   avatarImage: {
-    width: 76,
-    height: 76,
-    borderRadius: radii.l,
-    borderWidth: 2,
-    borderColor: colors.primary,
+    width: 84,
+    height: 84,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
   },
   avatarCam: {
     position: 'absolute',
@@ -158,30 +199,50 @@ const styles = StyleSheet.create({
     borderColor: colors.background,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: radii.l,
+    width: 84,
+    height: 84,
+    borderRadius: radii.xl,
     backgroundColor: colors.primarySubtle,
     borderWidth: 1,
     borderColor: colors.primaryBorder,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 0,
-    marginTop: 10,
   },
-  name: { color: colors.text, fontFamily: fonts.display, fontWeight: '700', fontSize: 20 },
-  email: { color: colors.textMuted, marginTop: 4 },
-  linkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.m, paddingVertical: spacing.m },
-  linkDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  name: {
+    color: colors.text,
+    fontFamily: fonts.displayBold,
+    fontWeight: '700',
+    fontSize: 21,
+    letterSpacing: -0.4,
+  },
+  email: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 13, marginTop: 3 },
+  profileMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: spacing.s,
+    marginTop: spacing.m,
+  },
+  linksCard: { paddingVertical: spacing.xs, paddingHorizontal: 0, overflow: 'hidden' },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.m,
+    paddingVertical: spacing.m,
+    paddingHorizontal: spacing.l,
+  },
+  linkDivider: { borderTopWidth: 1, borderTopColor: colors.borderSoft },
   linkIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.m,
+    width: 34,
+    height: 34,
+    borderRadius: radii.s + 2,
     backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   linkText: { flex: 1 },
-  linkLabel: { color: colors.text, fontWeight: '600', fontSize: 15 },
-  linkSub: { color: colors.textMuted, fontSize: 12.5, marginTop: 1 },
+  linkLabel: { ...typography.subheading, fontSize: 14.5 },
+  linkSub: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 1 },
 });

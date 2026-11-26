@@ -1,16 +1,25 @@
 /** Tuning tab — huidige setup, setups beheren, geschiedenis en vergelijken. */
 import React, { useCallback, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
 import { Badge, Button, Card, EmptyState, Loading, SectionTitle } from '@/components/ui';
-import { SlidersIcon } from '@/components/icons';
+import {
+  ChevronRightIcon,
+  ClipboardIcon,
+  GaugeIcon,
+  ScaleIcon,
+  SlidersIcon,
+  TimerIcon,
+  TrendingUpIcon,
+  WrenchIcon,
+} from '@/components/icons';
 import { FadeInView } from '@/components/motion';
 import { useScooters } from '@/hooks/useScooters';
 import * as tuningService from '@/services/tuning';
-import { colors, spacing } from '@/theme';
+import { colors, fonts, radii, spacing } from '@/theme';
 import type { TuningSetup } from '@/types';
 
 type Nav = AppNav;
@@ -20,6 +29,23 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
   const { activeScooter, setup } = useScooters();
   const [setups, setSetups] = useState<TuningSetup[]>([]);
   const [loading, setLoading] = useState(true);
+
+  /** Gereedschap naast de twee hoofdacties — één regel per bestemming. */
+  const tools: {
+    label: string;
+    sub: string;
+    icon: (p: { size?: number; color?: string }) => React.ReactElement;
+    route: string;
+  }[] = [
+    { label: 'Vertanding optimaliseren', sub: 'Rollen, vario en eindoverbrenging', icon: ScaleIcon, route: 'Gearing' },
+    { label: 'Metingen', sub: 'GPS-sprints en topsnelheid', icon: GaugeIcon, route: 'PerformanceHistory' },
+    { label: 'Setup vergelijken', sub: 'Twee setups naast elkaar', icon: SlidersIcon, route: 'SetupComparison' },
+    { label: 'Tuninggeschiedenis', sub: 'Wat je wanneer veranderde', icon: ClipboardIcon, route: 'TuningHistory' },
+    { label: 'Motordatabase', sub: 'Blokken en hun eigenschappen', icon: WrenchIcon, route: 'EngineDatabase' },
+    { label: 'Dashboard', sub: 'Voortgang van je tuning', icon: TrendingUpIcon, route: 'TuningDashboard' },
+    { label: 'Simulator', sub: 'Sproeier en uitlaat doorrekenen', icon: TimerIcon, route: 'TuningSimulator' },
+    { label: 'Carburateurdiagram', sub: 'Onderdelen en doorsnedes', icon: SlidersIcon, route: 'CarbDiagram' },
+  ];
 
   useFocusEffect(
     useCallback(() => {
@@ -60,63 +86,40 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
   return (
     <SafeAreaView style={styles.safe} edges={embedded ? [] : ['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionEyebrow}>TUNINGWERKPLAATS</Text>
+        <Text style={styles.sectionEyebrow}>Tuningwerkplaats</Text>
         <View style={styles.navRow}>
           <Button label="Nieuwe setup" onPress={() => navigation.navigate('SetupDetail', {})} style={styles.navBtn} />
-          <Button label="Carburateur afstellen" onPress={() => navigation.navigate('Afstel')} style={styles.navBtn} />
-        </View>
-        <View style={styles.navRow}>
-          <Button label="Vertanding optimaliseren" onPress={() => navigation.navigate('Gearing')} style={styles.navBtn} />
           <Button
-            label="Metingen"
+            label="Carburateur afstellen"
             variant="secondary"
-            onPress={() => navigation.navigate('PerformanceHistory')}
+            onPress={() => navigation.navigate('Afstel')}
             style={styles.navBtn}
           />
         </View>
-        <View style={styles.navRow}>
-          <Button
-            label="Setup vergelijken"
-            variant="secondary"
-            onPress={() => navigation.navigate('SetupComparison')}
-            style={styles.navBtn}
-          />
-          <Button
-            label="Tuninggeschiedenis"
-            variant="secondary"
-            onPress={() => navigation.navigate('TuningHistory')}
-            style={styles.navBtn}
-          />
-        </View>
-        <View style={styles.navRow}>
-          <Button
-            label="Motordatabase"
-            variant="secondary"
-            onPress={() => navigation.navigate('EngineDatabase')}
-            style={styles.navBtn}
-          />
-        </View>
-        <View style={styles.navRow}>
-          <Button
-            label="Dashboard"
-            variant="ghost"
-            onPress={() => navigation.navigate('TuningDashboard')}
-            style={styles.navBtn}
-          />
-          <Button
-            label="Simulator"
-            variant="ghost"
-            onPress={() => navigation.navigate('TuningSimulator')}
-            style={styles.navBtn}
-          />
-          <Button
-            label="Diagram"
-            variant="ghost"
-            onPress={() => navigation.navigate('CarbDiagram')}
-            style={styles.navBtn}
-          />
-        </View>
-        <View style={{ height: spacing.m }} />
+
+        <SectionTitle>Gereedschap</SectionTitle>
+        <Card style={styles.toolsCard}>
+          {tools.map((tool, i) => (
+            <Pressable
+              key={tool.route}
+              accessibilityRole="button"
+              onPress={() => navigation.navigate(tool.route as never)}
+              style={({ pressed }) => [
+                styles.toolRow,
+                i > 0 && styles.toolDivider,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <View style={styles.toolIcon}>{tool.icon({ size: 18, color: colors.textMuted })}</View>
+              <View style={styles.toolText}>
+                <Text style={styles.toolLabel}>{tool.label}</Text>
+                <Text style={styles.toolSub}>{tool.sub}</Text>
+              </View>
+              <ChevronRightIcon size={17} color={colors.textSubtle} />
+            </Pressable>
+          ))}
+        </Card>
+
         <SectionTitle>Huidige setup</SectionTitle>
         <Card>
           {setup ? (
@@ -199,13 +202,37 @@ const styles = StyleSheet.create({
   setupName: { color: colors.text, fontWeight: '700', fontSize: 16 },
   setupActions: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.m },
   setupBtn: { flex: 1, minHeight: 40 },
-  navRow: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.s },
+  navRow: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.s, marginBottom: spacing.l },
   sectionEyebrow: {
-    color: colors.textSubtle,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.2,
+    color: colors.primary,
+    fontFamily: fonts.display,
+    fontSize: 12.5,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
     marginBottom: spacing.xs,
   },
   navBtn: { flex: 1 },
+  toolsCard: { paddingVertical: spacing.xs, paddingHorizontal: 0, overflow: 'hidden', marginBottom: spacing.l },
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.m,
+    paddingVertical: spacing.m,
+    paddingHorizontal: spacing.l,
+  },
+  toolDivider: { borderTopWidth: 1, borderTopColor: colors.borderSoft },
+  toolIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.s + 2,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolText: { flex: 1 },
+  toolLabel: { color: colors.text, fontFamily: fonts.display, fontSize: 14.5, fontWeight: '600' },
+  toolSub: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 1 },
 });
