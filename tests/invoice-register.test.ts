@@ -137,6 +137,67 @@ describe('opnieuw delen', () => {
     expect(first).toContain('€ 44,45');
   });
 
+  it('geeft twee facturen op dezelfde dag een eigen nummer én document', () => {
+    const lines = invoiceLinesFromRecords(
+      [record('Oliewissel', new Date(2026, 10, 26, 9), 1995)],
+      (r) => r.custom_name!,
+    );
+    const build = (issuedAtIso: string) =>
+      buildInvoiceSnapshot({ scooter, ownerName: 'Sam', issuedAtIso, selection: period, lines });
+
+    const first = buildInvoiceHtmlFromSnapshot(
+      build('2026-11-26T09:00:00.000Z'),
+      formatInvoiceNumber(2026, 1),
+    );
+    const second = buildInvoiceHtmlFromSnapshot(
+      build('2026-11-26T15:00:00.000Z'),
+      formatInvoiceNumber(2026, 2),
+    );
+
+    expect(first).toContain('F50-2026-0001');
+    expect(second).toContain('F50-2026-0002');
+    expect(second).not.toContain('F50-2026-0001');
+    expect(second).not.toBe(first);
+  });
+
+  it('blijft gelijk als het onderhoud later wordt aangepast of aangevuld', () => {
+    const snapshot = buildInvoiceSnapshot({
+      scooter,
+      ownerName: 'Sam',
+      issuedAtIso: '2026-11-26T09:00:00.000Z',
+      selection: period,
+      lines: invoiceLinesFromRecords(
+        [record('Oliewissel', new Date(2026, 10, 2, 9), 1995)],
+        (r) => r.custom_name!,
+      ),
+    });
+    const before = buildInvoiceHtmlFromSnapshot(snapshot, 'F50-2026-0003');
+
+    // Later: de beurt is duurder geworden en er is een nieuwe beurt bijgekomen.
+    const laterLines = invoiceLinesFromRecords(
+      [
+        record('Oliewissel', new Date(2026, 10, 2, 9), 4500),
+        record('Remblokjes', new Date(2026, 10, 20, 12), 2450),
+      ],
+      (r) => r.custom_name!,
+    );
+    const laterSnapshot = buildInvoiceSnapshot({
+      scooter,
+      ownerName: 'Sam',
+      issuedAtIso: '2026-11-26T15:00:00.000Z',
+      selection: period,
+      lines: laterLines,
+    });
+    const laterDocument = buildInvoiceHtmlFromSnapshot(laterSnapshot, 'F50-2026-0004');
+
+    // De eerder gedeelde factuur wordt ongewijzigd opnieuw gerenderd.
+    expect(buildInvoiceHtmlFromSnapshot(snapshot, 'F50-2026-0003')).toBe(before);
+    expect(before).toContain('€ 19,95');
+    expect(before).not.toContain('Remblokjes');
+    expect(laterDocument).toContain('€ 69,50');
+    expect(laterDocument).toContain('Remblokjes');
+  });
+
   it('neemt het snapshot als bron, niet het actuele onderhoud', () => {
     const snapshot = buildInvoiceSnapshot({
       scooter,
