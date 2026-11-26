@@ -17,6 +17,7 @@ import {
   type MaintenancePdfRecord,
   type TuningPdfRun,
 } from '@/lib/pdf';
+import { selectRecordsForInvoice, type InvoiceSelection } from '@/lib/invoice-selection';
 import { computeFuelStats } from '@/services/fuel';
 import { listFuelLogs } from '@/services/fuel';
 import {
@@ -218,15 +219,28 @@ export async function exportMaintenancePdf(scooter: Scooter): Promise<void> {
 }
 
 /**
- * Factuur genereren (particulier): alle geregistreerde onderhoudsbeurten met
- * hun bedrag, in dezelfde dossierstijl als het onderhoudsboekje.
+ * Factuur genereren (particulier) voor een gekozen periode of één losse
+ * beurt, in dezelfde dossierstijl als het onderhoudsboekje. De periode op
+ * het document volgt automatisch uit de geselecteerde regels.
  */
-export async function exportInvoicePdf(scooter: Scooter): Promise<void> {
-  const [records, items, owner] = await Promise.all([
+export async function exportInvoicePdf(
+  scooter: Scooter,
+  selection: InvoiceSelection,
+): Promise<void> {
+  const [allRecords, items, owner] = await Promise.all([
     listRecords(scooter.id, 200),
     listMaintenanceItems().catch(() => []),
     ownerName(),
   ]);
+
+  const records = selectRecordsForInvoice(allRecords, selection);
+  if (records.length === 0) {
+    throw new Error(
+      selection.kind === 'record'
+        ? 'Deze onderhoudsbeurt is niet gevonden. Ververs de geschiedenis en probeer opnieuw.'
+        : 'Geen onderhoudsbeurten in deze periode. Kies een andere periode.',
+    );
+  }
 
   const resolveName = nameResolver(items);
   const issuedAt = new Date().toISOString();
