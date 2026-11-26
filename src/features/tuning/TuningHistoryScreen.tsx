@@ -17,6 +17,7 @@ import { useScooters } from '@/hooks/useScooters';
 import * as tuningService from '@/services/tuning';
 import { exportTuningPdf } from '@/services/pdf-export';
 import { formatDateTime } from '@/lib/format';
+import { logAppError } from '@/lib/error-log';
 import { colors, spacing } from '@/theme';
 import type { TuningChange } from '@/types';
 
@@ -37,7 +38,7 @@ export default function TuningHistoryScreen() {
     try {
       await exportTuningPdf(activeScooter);
     } catch (err) {
-      console.error('[pdf] Tuningrapport mislukt', err);
+      logAppError(err, 'Tuninggeschiedenis', 'tuningrapport');
       Alert.alert(
         'PDF mislukt',
         err instanceof Error && err.message

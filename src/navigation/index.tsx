@@ -12,6 +12,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { colors, fonts } from '@/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { subscribeToMaintenanceOpens } from '@/services/notifications';
+import { setActiveScreen } from '@/lib/active-screen';
 import {
   ChatIcon,
   HomeIcon,
@@ -177,12 +178,17 @@ export default function AppNavigator() {
       ref={navigationRef}
       theme={navTheme}
       onReady={() => {
+        setActiveScreen(navigationRef.getCurrentRoute()?.name ?? null);
         const scheduleId = pendingNotification.scheduleId;
         if (scheduleId) {
           pendingNotification.scheduleId = null;
           openNotificationTarget(scheduleId);
         }
       }}
+      // Houdt de schermnaam bij voor foutlogs en de error boundary.
+      onStateChange={() =>
+        setActiveScreen(navigationRef.getCurrentRoute()?.name ?? null)
+      }
     >
       <Stack.Navigator
         screenOptions={{

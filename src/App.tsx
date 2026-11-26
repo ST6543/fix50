@@ -21,6 +21,7 @@ import { ScootersProvider } from '@/hooks/useScooters';
 import { AppDataProvider } from '@/hooks/useAppData';
 import { colors } from '@/theme';
 import { Loading } from '@/components/ui';
+import ErrorBoundary from '@/components/error-boundary';
 
 function Gate() {
   const { loading } = useAuth();
@@ -45,13 +46,16 @@ function Gate() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <ScootersProvider>
-          <AppDataProvider>
-            <Gate />
-          </AppDataProvider>
-        </ScootersProvider>
-      </AuthProvider>
+      {/* App-breed: elke renderfout krijgt een nette fallback en een centrale log. */}
+      <ErrorBoundary>
+        <AuthProvider>
+          <ScootersProvider>
+            <AppDataProvider>
+              <Gate />
+            </AppDataProvider>
+          </ScootersProvider>
+        </AuthProvider>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

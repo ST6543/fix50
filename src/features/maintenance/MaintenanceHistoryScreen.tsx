@@ -46,6 +46,7 @@ import {
   type InvoiceSelection,
 } from '@/lib/invoice-selection';
 import { formatDate, formatDateTime, formatKm } from '@/lib/format';
+import { logAppError } from '@/lib/error-log';
 import { colors, fonts, radii, spacing, typography } from '@/theme';
 import type { MaintenanceRecord } from '@/types';
 
@@ -175,7 +176,7 @@ export default function MaintenanceHistoryScreen() {
         .then(setInvoices)
         .catch(() => undefined);
     } catch (err) {
-      console.error('[pdf] Factuur mislukt', err);
+      logAppError(err, 'Onderhoudsgeschiedenis', 'factuur');
       Alert.alert(
         'Factuur mislukt',
         err instanceof Error && err.message
@@ -193,7 +194,7 @@ export default function MaintenanceHistoryScreen() {
     try {
       await exportStoredInvoicePdf(entry);
     } catch (err) {
-      console.error('[pdf] Factuur opnieuw delen mislukt', err);
+      logAppError(err, 'Onderhoudsgeschiedenis', 'factuur opnieuw delen');
       Alert.alert(
         'Opnieuw delen mislukt',
         err instanceof Error && err.message
@@ -211,7 +212,7 @@ export default function MaintenanceHistoryScreen() {
     try {
       await exportMaintenancePdf(activeScooter);
     } catch (err) {
-      console.error('[pdf] Onderhoudspaspoort mislukt', err);
+      logAppError(err, 'Onderhoudsgeschiedenis', 'onderhoudspaspoort');
       Alert.alert(
         'PDF mislukt',
         err instanceof Error && err.message
