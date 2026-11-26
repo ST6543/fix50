@@ -1,33 +1,24 @@
 /** Home-dashboard — persoonlijke begroeting, scooter-hero, signalen, verwachting en sprint. */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { AppNav, TabNav } from '@/navigation/types';
 
 import { Badge, Card, Eyebrow, IconTile, SectionTitle, SkeletonScreen } from '@/components/ui';
-import { estimateCurrentKm, kmAnchorLabel } from '@/lib/km-estimate';
 import { SpeedChart } from '@/components/charts';
 import { FadeInView } from '@/components/motion';
 import { notifyDeterioration } from '@/services/notifications';
 import { ChevronRightIcon, GaugeIcon, MotoIcon, WarningIcon } from '@/components/icons';
 import { useAuth } from '@/hooks/useAuth';
 import { useScooters } from '@/hooks/useScooters';
-import {
-  listOpenReminders,
-  buildWeekOverview,
-  buildWeekForecast,
-  listMaintenanceItems,
-  type WeekForecastItem,
-} from '@/services/maintenance';
-import { listRuns } from '@/services/performance';
-import { computeFuelStats, listFuelLogs } from '@/services/fuel';
-import { listSetups } from '@/services/tuning';
+import { useMaintenanceData, usePerformanceData, useTuningData } from '@/hooks/useAppData';
+import { buildWeekOverview, buildWeekForecast } from '@/services/maintenance';
+import { computeFuelStats, listFuelLogs, type FuelStats } from '@/services/fuel';
 import { buildInsights, applyAiVerwoording, type Insight, type AiVerwoordingItem } from '@/lib/insights';
 import { fetchAiVerwoording } from '@/services/ai-insights';
 import { formatKmShort, longDateLabel, timeAgo } from '@/lib/format';
 import { colors, fonts, layout, radii, spacing, typography } from '@/theme';
-import type { MaintenanceReminder, PerformanceRun, WeekTask } from '@/types';
 
 type Nav = AppNav;
 
@@ -45,92 +36,98 @@ export default function HomeScreen() {
   const tabNav = useNavigation<TabNav>();
   const { profile } = useAuth();
   const { activeScooter, loading: scootersLoading } = useScooters();
-  const [weekTasks, setWeekTasks] = useState<WeekTask[]>([]);
-  const [forecast, setForecast] = useState<WeekForecastItem[]>([]);
-  const [reminders, setReminders] = useState<MaintenanceReminder[]>([]);
-  const [lastRun, setLastRun] = useState<PerformanceRun | null>(null);
-  const [insights, setInsights] = useState<Insight[]>([]);
+  const {
+    items,
+    schedules,
+    reminders,
+    km,
+    kmIsEstimated,
+    kmAnchor,
+    loading: dataLoading,
+    refresh: refreshData,
+  } = useMaintenanceData();
+  const { setups } = useTuningData();
+  const { runs } = usePerformanceData();
+  const [fuelStats, setFuelStats] = useState<FuelStats | null>(null);
   /** Fase B: AI-verwoording per signaal-index; null = vaste teksten tonen. */
   const [aiVer, setAiVer] = useState<AiVerwoordingItem[] | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
+      void refreshData();
+      if (!activeScooter) {
+        setFuelStats(null);
+        return;
+      }
       let alive = true;
-      (async () => {
-        try {
-          if (activeScooter) {
-            const [items, schedules, rems, fuelLogs, setups, runs] = await Promise.all([
-              listMaintenanceItems(),
-              import('@/services/maintenance').then((m) => m.listSchedules(activeScooter.id)),
-              listOpenReminders(activeScooter.id),
-              import('@/services/fuel').then((f) => f.listFuelLogs(activeScooter.id, 50)),
-              import('@/services/tuning').then((t) => t.listSetups(activeScooter.id)),
-              listRuns(50, activeScooter?.id),
-            ]);
-            if (!alive) return;
-            setLastRun(runs[0] ?? null);
-            const estimate = estimateCurrentKm(activeScooter);
-            setWeekTasks(
-              buildWeekOverview(schedules, items, estimate.estimatedKm).filter(
-                (t) => t.overdue || t.dueThisWeek,
-              ),
-            );
-            const forecastFull = buildWeekForecast(
-              schedules,
-              items,
-              estimate.estimatedKm,
-              activeScooter.avg_km_per_week,
-            );
-            setForecast(forecastFull.slice(0, 4));
-            setReminders(rems);
-            // Slimme signalen (fase A van het AI-plan): deterministische checks op eigen data.
-            const computedInsights = buildInsights({
-              fuel: computeFuelStats(fuelLogs),
-              forecast: forecastFull,
-              runs,
-              setupNames: Object.fromEntries(setups.map((s) => [s.id, s.name])),
-            });
-            setInsights(computedInsights);
-            // Fase B: AI-verwoording (stil — offline/rate-limit geeft gewoon de vaste teksten).
-            fetchAiVerwoording(activeScooter?.id ?? null, computedInsights)
-              .then((texts) => {
-                if (alive && texts) setAiVer(texts);
-              })
-              .catch(() => undefined);
-            // Fase C: push bij verslechtering — waarschuwingssignalen → in-app melding
-            // (best-effort, max 1× per week per signaal; stil bij fouten/offline).
-            notifyDeterioration(activeScooter.id, computedInsights).catch(() => undefined);
-          } else {
-            setWeekTasks([]);
-            setForecast([]);
-            setReminders([]);
-            setInsights([]);
-            setAiVer(null);
-            setLastRun(null);
-          }
-        } catch {
-          // Offline: dashboard werkt met wat er is
-        } finally {
-          if (alive) setLoading(false);
-        }
-      })();
+      listFuelLogs(activeScooter.id, 50)
+        .then((logs) => {
+          if (alive) setFuelStats(computeFuelStats(logs));
+        })
+        .catch(() => {
+          if (alive) setFuelStats(null);
+        });
       return () => {
         alive = false;
       };
-    }, [activeScooter]),
+    }, [activeScooter, refreshData]),
   );
 
-  const displayInsights = useMemo(
-    () => applyAiVerwoording(insights, aiVer),
-    [insights, aiVer],
+  // Alle onderhouds-, tuning- en meetcijfers komen uit dezelfde gedeelde snapshot.
+  const forecastFull = useMemo(
+    () => (activeScooter ? buildWeekForecast(schedules, items, km, activeScooter.avg_km_per_week) : []),
+    [activeScooter, schedules, items, km],
   );
+  const weekTasks = useMemo(
+    () =>
+      activeScooter
+        ? buildWeekOverview(schedules, items, km).filter((task) => task.overdue || task.dueThisWeek)
+        : [],
+    [activeScooter, schedules, items, km],
+  );
+  const forecast = forecastFull.slice(0, 4);
+  const lastRun = runs[0] ?? null;
+  const insights = useMemo(
+    () =>
+      activeScooter
+        ? buildInsights({
+            fuel: fuelStats,
+            forecast: forecastFull,
+            runs,
+            setupNames: Object.fromEntries(setups.map((setup) => [setup.id, setup.name])),
+          })
+        : [],
+    [activeScooter, fuelStats, forecastFull, runs, setups],
+  );
+  const displayInsights = useMemo(() => applyAiVerwoording(insights, aiVer), [insights, aiVer]);
 
-  if (scootersLoading || loading) return <SkeletonScreen />;
+  // Fase B: AI-verwoording (stil — offline/rate-limit geeft de vaste teksten).
+  useEffect(() => {
+    if (!activeScooter || insights.length === 0) {
+      setAiVer(null);
+      return;
+    }
+    let alive = true;
+    fetchAiVerwoording(activeScooter.id, insights)
+      .then((texts) => {
+        if (alive && texts) setAiVer(texts);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [activeScooter?.id, insights]);
+
+  // Fase C: push bij verslechtering — best-effort, max 1× per week per signaal.
+  useEffect(() => {
+    if (activeScooter && insights.length > 0) {
+      notifyDeterioration(activeScooter.id, insights).catch(() => undefined);
+    }
+  }, [activeScooter?.id, insights]);
+
+  if (scootersLoading || dataLoading) return <SkeletonScreen />;
 
   const now = new Date();
-  const estimate = activeScooter ? estimateCurrentKm(activeScooter) : null;
-  const anchor = estimate ? kmAnchorLabel(estimate.daysSinceUpdate) : null;
   const overdue = weekTasks.filter((t) => t.overdue);
   const firstTask = weekTasks[0];
   const initial = (profile?.display_name ?? 'F').charAt(0).toUpperCase();
@@ -207,14 +204,14 @@ export default function HomeScreen() {
                   <Text style={typography.eyebrow}>Kilometerstand</Text>
                   <View style={styles.heroValueRow}>
                     <Text style={typography.hero} numberOfLines={1} adjustsFontSizeToFit>
-                      {estimate ? formatKmShort(estimate.estimatedKm) : '—'}
+                      {formatKmShort(km)}
                     </Text>
                     <Text style={styles.heroUnit}>km</Text>
                   </View>
                   <Text style={styles.heroEstimate} numberOfLines={2}>
-                    {estimate?.isEstimated
-                      ? `± geschat · ${anchor ?? 'op basis van je weekgemiddelde'}`
-                      : (anchor ?? 'nog niet bijgewerkt')}
+                    {kmIsEstimated
+                      ? `± geschat · ${kmAnchor ?? 'op basis van je weekgemiddelde'}`
+                      : (kmAnchor ?? 'nog niet bijgewerkt')}
                   </Text>
                 </View>
                 <Pressable

@@ -1,38 +1,29 @@
 /** Metingsgeschiedenis — alle runs met GPS-kwaliteit. */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
-import { Badge, Card, EmptyState, Loading } from '@/components/ui';
+import { Badge, Card, EmptyState, SkeletonScreen } from '@/components/ui';
 import { FlagIcon } from '@/components/icons';
-import * as perfService from '@/services/performance';
-import { useScooters } from '@/hooks/useScooters';
+import { usePerformanceData } from '@/hooks/useAppData';
 import { formatDateTime, formatSeconds, formatSpeed } from '@/lib/format';
 import { colors, spacing } from '@/theme';
-import type { PerformanceRun } from '@/types';
 
 type Nav = AppNav;
 
 export default function PerformanceHistoryScreen() {
   const navigation = useNavigation<Nav>();
-  const { activeScooter } = useScooters();
-  const [runs, setRuns] = useState<PerformanceRun[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { runs, loading, refresh } = usePerformanceData();
 
   useFocusEffect(
     useCallback(() => {
-      // Alleen metingen van de actieve scooter.
-      perfService
-        .listRuns(100, activeScooter?.id)
-        .then(setRuns)
-        .catch(() => setRuns([]))
-        .finally(() => setLoading(false));
-    }, [activeScooter]),
+      void refresh();
+    }, [refresh]),
   );
 
-  if (loading) return <Loading label="Metingen laden…" />;
+  if (loading) return <SkeletonScreen />;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

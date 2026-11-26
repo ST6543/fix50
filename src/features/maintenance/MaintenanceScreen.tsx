@@ -9,6 +9,7 @@ import { Badge, Button, Card, EmptyState, SectionTitle, SkeletonScreen } from '@
 import { AlertCircleIcon, ArrowRightIcon, MotoIcon, WrenchIcon } from '@/components/icons';
 import { PressableScale } from '@/components/motion';
 import { useScooters } from '@/hooks/useScooters';
+import { useMaintenanceData } from '@/hooks/useAppData';
 import {
   buildMaintenancePlan,
   groupPlan,
@@ -16,63 +17,33 @@ import {
   planDueShort,
   summarizePlan,
 } from '@/lib/maintenance-plan';
-import {
-  dismissReminder,
-  ensureSchedulesForScooter,
-  listMaintenanceItems,
-  listOpenReminders,
-  listSchedules,
-} from '@/services/maintenance';
+import { dismissReminder } from '@/services/maintenance';
 import { formatKm } from '@/lib/format';
 import { colors, fonts, spacing, typography } from '@/theme';
-import type { MaintenanceItem, MaintenanceReminder, MaintenanceSchedule } from '@/types';
 
 type Nav = AppNav;
 
 export default function MaintenanceScreen({ embedded = false }: { embedded?: boolean }) {
   const navigation = useNavigation<Nav>();
   const { activeScooter } = useScooters();
-  const [items, setItems] = useState<MaintenanceItem[]>([]);
-  const [schedules, setSchedules] = useState<MaintenanceSchedule[]>([]);
-  const [reminders, setReminders] = useState<MaintenanceReminder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const {
+    items,
+    schedules,
+    reminders,
+    km,
+    kmIsEstimated,
+    loading,
+    error: failed,
+    refresh,
+  } = useMaintenanceData();
   const [showAll, setShowAll] = useState(false);
 
-  const scooterId = activeScooter?.id ?? null;
   const fuelSystem = activeScooter?.fuel_system ?? null;
-
-  const load = useCallback(async () => {
-    if (!scooterId) {
-      setLoading(false);
-      return;
-    }
-    setFailed(false);
-    try {
-      const [itemList, reminderList] = await Promise.all([
-        listMaintenanceItems(),
-        listOpenReminders(scooterId),
-      ]);
-      let scheduleList = await listSchedules(scooterId);
-      // Eerste bezoek of een scooter zonder plan: vul de planning aan.
-      if (scheduleList.length === 0 && fuelSystem) {
-        await ensureSchedulesForScooter({ id: scooterId, fuel_system: fuelSystem });
-        scheduleList = await listSchedules(scooterId);
-      }
-      setItems(itemList);
-      setSchedules(scheduleList);
-      setReminders(reminderList);
-    } catch {
-      setFailed(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [scooterId, fuelSystem]);
 
   useFocusEffect(
     useCallback(() => {
-      void load();
-    }, [load]),
+      void refresh();
+    }, [refresh]),
   );
 
   const plan = useMemo(
@@ -80,10 +51,10 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
       buildMaintenancePlan({
         items,
         schedules,
-        currentKm: activeScooter?.current_km ?? 0,
+        currentKm: km,
         fuelSystem,
       }),
-    [items, schedules, activeScooter?.current_km, fuelSystem],
+    [items, schedules, km, fuelSystem],
   );
   const groups = useMemo(() => groupPlan(plan), [plan]);
   const summary = useMemo(() => summarizePlan(plan), [plan]);
@@ -92,8 +63,8 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
   const visibleGroups = showAll ? groups : groups.filter((group) => group.key !== 'gepland');
 
   async function handleDismiss(id: string, status: 'afgerond' | 'genegeerd') {
-    setReminders((prev) => prev.filter((reminder) => reminder.id !== id));
     await dismissReminder(id, status).catch(() => undefined);
+    await refresh({ force: true });
   }
 
   if (loading) return <SkeletonScreen />;
@@ -112,7 +83,7 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
     );
   }
 
-  if (failed) {
+  if (failed && items.length === 0) {
     return (
       <SafeAreaView style={styles.safe} edges={embedded ? [] : ['top']}>
         <EmptyState
@@ -121,7 +92,7 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
           title="Onderhoudsplan niet geladen"
           subtitle="Controleer je verbinding en probeer het opnieuw."
           actionLabel="Opnieuw proberen"
-          onAction={() => void load()}
+          onAction={() => void refresh({ force: true })}
         />
       </SafeAreaView>
     );
@@ -154,7 +125,8 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
                 {activeScooter.name}
               </Text>
               <Text style={styles.heroMeta}>
-                {fuelSystem} · {formatKm(activeScooter.current_km)}
+                {fuelSystem} · {formatKm(km)}
+                {kmIsEstimated ? ' (geschat)' : ''}
               </Text>
             </View>
             <Badge

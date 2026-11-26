@@ -6,6 +6,7 @@ import { RouteProp, useRoute, useFocusEffect } from '@react-navigation/native';
 
 import { Badge, Button, Card, Input, Loading, SectionTitle } from '@/components/ui';
 import { useScooters } from '@/hooks/useScooters';
+import { useMaintenanceData } from '@/hooks/useAppData';
 import { listRecords, registerMaintenance, updateSchedule } from '@/services/maintenance';
 import { formatDate, formatKmShort, intervalLabel } from '@/lib/format';
 import { colors, spacing } from '@/theme';
@@ -36,6 +37,7 @@ function adviceRange(item: MaintenanceItem): string | null {
 export default function MaintenanceDetailScreen() {
   const route = useRoute<RouteProp<RouteParams, 'MaintenanceDetail'>>();
   const { activeScooter, reload: reloadScooters } = useScooters();
+  const { refresh: refreshData } = useMaintenanceData();
   const [schedule, setSchedule] = useState<MaintenanceSchedule | null>(null);
   const [item, setItem] = useState<MaintenanceItem | null>(null);
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
@@ -73,6 +75,7 @@ export default function MaintenanceDetailScreen() {
       interval_km: km > 0 ? km : null,
       interval_months: months > 0 ? months : null,
     }).catch(() => undefined);
+    await refreshData({ force: true });
     Alert.alert('Opgeslagen', 'Interval bijgewerkt.');
     void load();
   }
@@ -86,6 +89,7 @@ export default function MaintenanceDetailScreen() {
       notes: null,
     }).catch(() => undefined);
     await reloadScooters();
+    await refreshData({ force: true });
     Alert.alert('Geregistreerd', 'Onderhoud is opgeslagen.');
     void load();
   }

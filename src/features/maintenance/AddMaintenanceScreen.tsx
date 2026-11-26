@@ -10,21 +10,21 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { MotoIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
-import { listMaintenanceItems, registerMaintenance } from '@/services/maintenance';
+import { useMaintenanceData } from '@/hooks/useAppData';
+import { registerMaintenance } from '@/services/maintenance';
 import * as scootersService from '@/services/scooters';
 import { scanInvoice, type InvoiceSuggestion } from '@/services/invoice-scan';
 import { shrinkForScan } from '@/lib/image-shrink';
 import { euroSchema, eurosToCents, kmUpdateSchema } from '@/lib/validation';
 import { base64ToBytes, detectImageMime } from '@/lib/base64';
 import { colors, spacing } from '@/theme';
-import type { MaintenanceItem } from '@/types';
 
 type Nav = AppNav;
 
 export default function AddMaintenanceScreen() {
   const navigation = useNavigation<Nav>();
   const { activeScooter, reload } = useScooters();
-  const [items, setItems] = useState<MaintenanceItem[]>([]);
+  const { items, refresh: refreshData } = useMaintenanceData();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [customName, setCustomName] = useState('');
   const [km, setKm] = useState('');
@@ -105,14 +105,10 @@ export default function AddMaintenanceScreen() {
   }
   // ────────────────────────────────────────────────────────────────────────────
 
+  // Items komen uit de gedeelde snapshot; kies de eerste zolang er niets is gekozen.
   useEffect(() => {
-    listMaintenanceItems()
-      .then((list) => {
-        setItems(list);
-        if (list[0]) setSelectedId(list[0].id);
-      })
-      .catch(() => setItems([]));
-  }, []);
+    if (!selectedId && items[0]) setSelectedId(items[0].id);
+  }, [items, selectedId]);
 
   useEffect(() => {
     if (activeScooter) setKm(String(activeScooter.current_km));
@@ -176,6 +172,7 @@ export default function AddMaintenanceScreen() {
         notes: notes.trim() || null,
       });
       await reload();
+      await refreshData({ force: true });
       if (Platform.OS === 'web') {
         // Alert is een no-op op web — direct terug, anders blijft het formulier open.
         navigation.goBack();

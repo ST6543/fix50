@@ -1,5 +1,5 @@
 /** Tuning tab — huidige setup, setups beheren, geschiedenis en vergelijken. */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -18,6 +18,7 @@ import {
 } from '@/components/icons';
 import { FadeInView } from '@/components/motion';
 import { useScooters } from '@/hooks/useScooters';
+import { useTuningData } from '@/hooks/useAppData';
 import * as tuningService from '@/services/tuning';
 import { colors, fonts, radii, spacing } from '@/theme';
 import type { TuningSetup } from '@/types';
@@ -27,8 +28,7 @@ type Nav = AppNav;
 export default function TuningScreen({ embedded = false }: { embedded?: boolean }) {
   const navigation = useNavigation<Nav>();
   const { activeScooter, setup } = useScooters();
-  const [setups, setSetups] = useState<TuningSetup[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { setups, loading, refresh } = useTuningData();
 
   /** Gereedschap naast de twee hoofdacties — één regel per bestemming. */
   const tools: {
@@ -49,22 +49,14 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
 
   useFocusEffect(
     useCallback(() => {
-      if (!activeScooter) {
-        setLoading(false);
-        return;
-      }
-      tuningService
-        .listSetups(activeScooter.id)
-        .then(setSetups)
-        .catch(() => setSetups([]))
-        .finally(() => setLoading(false));
-    }, [activeScooter]),
+      void refresh();
+    }, [refresh]),
   );
 
   async function handleActivate(s: TuningSetup) {
     if (!activeScooter) return;
     await tuningService.activateSetup(activeScooter.id, s.id).catch(() => undefined);
-    setSetups((prev) => prev.map((x) => ({ ...x, is_active: x.id === s.id })));
+    await refresh({ force: true });
   }
 
   async function handleDelete(s: TuningSetup) {
@@ -75,7 +67,7 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
         style: 'destructive',
         onPress: async () => {
           await tuningService.deleteSetup(s.id).catch(() => undefined);
-          setSetups((prev) => prev.filter((x) => x.id !== s.id));
+          await refresh({ force: true });
         },
       },
     ]);

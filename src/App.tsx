@@ -18,6 +18,7 @@ import {
 import AppNavigator from '@/navigation';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { ScootersProvider } from '@/hooks/useScooters';
+import { AppDataProvider } from '@/hooks/useAppData';
 import { colors } from '@/theme';
 import { Loading } from '@/components/ui';
 
@@ -46,7 +47,9 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <ScootersProvider>
-          <Gate />
+          <AppDataProvider>
+            <Gate />
+          </AppDataProvider>
         </ScootersProvider>
       </AuthProvider>
     </SafeAreaProvider>

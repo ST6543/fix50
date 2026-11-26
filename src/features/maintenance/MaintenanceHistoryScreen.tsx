@@ -7,12 +7,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Badge, Button, Card, EmptyState, Loading } from '@/components/ui';
 import { ClipboardIcon, SendIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
-import { listMaintenanceItems, listRecords } from '@/services/maintenance';
+import { useMaintenanceData } from '@/hooks/useAppData';
+import { listRecords } from '@/services/maintenance';
 import { exportInvoicePdf, exportMaintenancePdf } from '@/services/pdf-export';
 import { buildMaintenanceSummary, shareMaintenanceLog } from '@/lib/export';
 import { formatDateTime, formatKm } from '@/lib/format';
 import { colors, fonts, spacing, typography } from '@/theme';
-import type { MaintenanceItem, MaintenanceRecord } from '@/types';
+import type { MaintenanceRecord } from '@/types';
 
 /** Formateer centen als €12,50. */
 function euros(cents: number): string {
@@ -21,8 +22,8 @@ function euros(cents: number): string {
 
 export default function MaintenanceHistoryScreen() {
   const { activeScooter } = useScooters();
+  const { items } = useMaintenanceData();
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
-  const [items, setItems] = useState<MaintenanceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -38,9 +39,6 @@ export default function MaintenanceHistoryScreen() {
         .then(setRecords)
         .catch(() => setRecords([]))
         .finally(() => setLoading(false));
-      listMaintenanceItems()
-        .then(setItems)
-        .catch(() => setItems([]));
     }, [activeScooter]),
   );
 

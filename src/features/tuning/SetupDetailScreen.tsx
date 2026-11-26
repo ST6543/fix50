@@ -7,6 +7,7 @@ import type { AppNav } from '@/navigation/types';
 
 import { Button, Card, Chip, ChipRow, ErrorText, Input, SectionTitle } from '@/components/ui';
 import { useScooters } from '@/hooks/useScooters';
+import { useTuningData } from '@/hooks/useAppData';
 import * as tuningService from '@/services/tuning';
 import * as scootersService from '@/services/scooters';
 import { colors, spacing } from '@/theme';
@@ -36,6 +37,7 @@ export default function SetupDetailScreen() {
   const route = useRoute<RouteProp<RouteParams, 'SetupDetail'>>();
   const navigation = useNavigation<Nav>();
   const { activeScooter, setup: currentSetup, reload } = useScooters();
+  const { refresh: refreshSetups } = useTuningData();
   const editingId = route.params?.setupId;
 
   const [name, setName] = useState(editingId ? '' : 'Nieuwe setup');
@@ -107,6 +109,7 @@ export default function SetupDetailScreen() {
         await tuningService.activateSetup(activeScooter.id, created.id);
       }
       await reload();
+      await refreshSetups({ force: true });
       Alert.alert('Opgeslagen', 'Setup bewaard.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Opslaan mislukt.');
