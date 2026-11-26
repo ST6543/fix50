@@ -2,6 +2,7 @@
 import { query } from './api';
 import { supabase } from '@/lib/supabase';
 import { appliesToFuelSystem } from '@/lib/maintenance-plan';
+import { baselineDueFields, type ServiceBaseline } from '@/lib/maintenance-baseline';
 import type {
   MaintenanceItem,
   MaintenanceRecord,
@@ -39,21 +40,33 @@ export async function listSchedules(scooterId: UUID): Promise<MaintenanceSchedul
  * Startpunt is de ondergrens van het adviesbereik — dat is het controlemoment;
  * het bovenste getal is het vervangmoment. Bestaande rijen blijven ongemoeid
  * (ignoreDuplicates), zodat een zelf aangepast interval nooit wordt overschreven.
+ *
+ * Is de laatste beurt bekend (onboarding), dan vult die de eerste planning:
+ * `last_done_*` en de daaruit volgende `next_due_*`, zodat de vervaldatums
+ * meteen kloppen. Zonder baseline blijven die velden leeg en rekent het plan
+ * vanaf de huidige stand.
  */
 export async function ensureSchedulesForScooter(scooter: {
   id: UUID;
   fuel_system: string | null;
+  baseline?: ServiceBaseline | null;
 }): Promise<void> {
   const items = await listMaintenanceItems();
+  const baseline = scooter.baseline ?? null;
   const rows = items
     .filter((item) => appliesToFuelSystem(item, scooter.fuel_system))
-    .map((item) => ({
-      scooter_id: scooter.id,
-      item_id: item.id,
-      interval_km: item.interval_km_min ?? item.interval_km_max,
-      interval_months: item.interval_months_min ?? item.interval_months_max,
-      enabled: true,
-    }))
+    .map((item) => {
+      const interval_km = item.interval_km_min ?? item.interval_km_max;
+      const interval_months = item.interval_months_min ?? item.interval_months_max;
+      return {
+        scooter_id: scooter.id,
+        item_id: item.id,
+        interval_km,
+        interval_months,
+        enabled: true,
+        ...baselineDueFields({ baseline, intervalKm: interval_km, intervalMonths: interval_months }),
+      };
+    })
     // Onderdelen zonder enig interval ("bij afwijking") horen niet in een plan.
     .filter((row) => row.interval_km !== null || row.interval_months !== null);
   if (rows.length === 0) return;

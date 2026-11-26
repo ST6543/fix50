@@ -7,12 +7,14 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { Button, Card, ErrorText, Input, ChipRow, Chip } from '@/components/ui';
+import { Button, Card, ErrorText, Input, ChipRow, Chip, SegmentSwitch } from '@/components/ui';
 import { useAuth } from '@/hooks/useAuth';
 import { useScooters } from '@/hooks/useScooters';
 import { ENGINE_FAMILIES, FUEL_SYSTEMS, type EngineFamily } from '@/constants/branding';
 import { supabase } from '@/lib/supabase';
-import { colors, spacing } from '@/theme';
+import { parseDateInput } from '@/lib/invoice-selection';
+import type { ServiceBaseline } from '@/lib/maintenance-baseline';
+import { colors, fonts, spacing } from '@/theme';
 import type { RootStackParamList } from '@/navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
@@ -27,6 +29,10 @@ export default function OnboardingScreen({ navigation }: Props) {
   const [engine, setEngine] = useState<EngineFamily | null>(null);
   const [fuel, setFuel] = useState<'2T' | '4T' | 'Injectie' | null>(null);
   const [km, setKm] = useState('');
+  /** Laatste beurt: km + datum, of "net gekocht" (geen historie). */
+  const [baselineMode, setBaselineMode] = useState<'service' | 'new'>('service');
+  const [serviceKm, setServiceKm] = useState('');
+  const [serviceDate, setServiceDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [skipBusy, setSkipBusy] = useState(false);
@@ -37,6 +43,35 @@ export default function OnboardingScreen({ navigation }: Props) {
       setError('Geef je brommer een naam, bijv. "Mijn Aerox".');
       return;
     }
+
+    const currentKmNumber = Number(km.trim().replace(',', '.'));
+    const currentKm = Number.isFinite(currentKmNumber) && currentKmNumber > 0 ? Math.round(currentKmNumber) : 0;
+
+    // Zonder beurt blijft het plan eerlijk "vanaf nu" rekenen.
+    let baseline: ServiceBaseline | null = null;
+    if (baselineMode === 'service') {
+      const doneAtIso = parseDateInput(serviceDate);
+      if (!doneAtIso) {
+        setError('Vul de datum van je laatste beurt in als DD-MM-JJJJ, of kies "Net gekocht".');
+        return;
+      }
+      const serviceKmNumber = Number(serviceKm.trim().replace(',', '.'));
+      if (!serviceKm.trim() || !Number.isFinite(serviceKmNumber) || serviceKmNumber < 0) {
+        setError('Vul de kilometerstand van je laatste beurt in, of kies "Net gekocht".');
+        return;
+      }
+      const todayIso = new Date().toISOString().slice(0, 10);
+      if (doneAtIso > todayIso) {
+        setError('De datum van je laatste beurt kan niet in de toekomst liggen.');
+        return;
+      }
+      if (currentKm > 0 && Math.round(serviceKmNumber) > currentKm) {
+        setError('De stand van je laatste beurt kan niet hoger zijn dan je huidige kilometerstand.');
+        return;
+      }
+      baseline = { km: Math.round(serviceKmNumber), doneAtIso };
+    }
+
     setBusy(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -56,15 +91,16 @@ export default function OnboardingScreen({ navigation }: Props) {
           model: model.trim() || null,
           engine_type: engine,
           fuel_system: fuel,
-          current_km: Number(km) > 0 ? Number(km) : 0,
+          current_km: currentKm,
         })
         .select('id')
         .single();
       if (sErr) throw sErr;
 
-      // Zorg dat de basis-onderhoudsschedules bestaan zodat reminders direct werken.
+      // Basisplanning meteen vullen: de laatste beurt (of "vanaf nu") bepaalt
+      // de eerste vervalstanden en vervaldatums.
       const { ensureSchedulesForScooter } = await import('@/services/maintenance');
-      await ensureSchedulesForScooter({ id: scooter.id, fuel_system: fuel });
+      await ensureSchedulesForScooter({ id: scooter.id, fuel_system: fuel, baseline });
 
       await refreshProfile();
       await reload();
@@ -143,6 +179,44 @@ export default function OnboardingScreen({ navigation }: Props) {
 
           <Input label="Kilometerstand (mag leeg)" value={km} onChangeText={setKm} keyboardType="number-pad" placeholder="12450" />
 
+          <Text style={styles.fieldLabel}>Laatste onderhoudsbeurt</Text>
+          <SegmentSwitch
+            segments={[
+              { key: 'service' as const, label: 'Beurt bekend' },
+              { key: 'new' as const, label: 'Net gekocht' },
+            ]}
+            value={baselineMode}
+            onChange={setBaselineMode}
+          />
+          {baselineMode === 'service' ? (
+            <View style={{ flexDirection: 'row', gap: spacing.s, marginTop: spacing.m }}>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="Km bij die beurt"
+                  value={serviceKm}
+                  onChangeText={setServiceKm}
+                  keyboardType="number-pad"
+                  placeholder="11000"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="Datum (DD-MM-JJJJ)"
+                  value={serviceDate}
+                  onChangeText={setServiceDate}
+                  placeholder="15-06-2026"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={10}
+                />
+              </View>
+            </View>
+          ) : null}
+          <Text style={styles.baselineHint}>
+            {baselineMode === 'service'
+              ? 'We rekenen je eerste planning vanaf deze beurt, zodat de vervaldatums meteen kloppen.'
+              : 'Geen beurt bekend? We rekenen vanaf je huidige stand en vandaag, tot je een beurt registreert.'}
+          </Text>
+
           {error ? <ErrorText>{error}</ErrorText> : null}
           <Button
             label="Ga naar FIX50"
@@ -170,4 +244,11 @@ const styles = StyleSheet.create({
   welcome: { fontSize: 26, fontWeight: '800', color: colors.text },
   subtitle: { color: colors.textMuted, marginTop: spacing.xs, marginBottom: spacing.l },
   fieldLabel: { color: colors.textMuted, fontSize: 13, marginTop: spacing.m, marginBottom: spacing.xs },
+  baselineHint: {
+    color: colors.textSubtle,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: spacing.s,
+  },
 });
