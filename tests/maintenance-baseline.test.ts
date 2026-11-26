@@ -86,6 +86,34 @@ describe('baselineDueFields', () => {
     ).toEqual({ ...none, last_done_km: 12000, last_done_at: '2026-03-10T12:00:00.000Z' });
   });
 
+  it('rekent bij aankoop vanaf de aankoopstand en vandaag, zonder beurt te claimen', () => {
+    const due = baselineDueFields({
+      baseline: { source: 'purchase', km: 10000, doneAtIso: null },
+      intervalKm: 6000,
+      intervalMonths: 12,
+      todayIso: '2026-11-26',
+    });
+
+    expect(due).toEqual({
+      last_done_km: null,
+      last_done_at: null,
+      next_due_km: 16000,
+      next_due_at: '2027-11-26',
+    });
+  });
+
+  it('laat bij aankoop de datum leeg zonder maandinterval', () => {
+    const due = baselineDueFields({
+      baseline: { source: 'purchase', km: 10000, doneAtIso: null },
+      intervalKm: 3000,
+      intervalMonths: null,
+      todayIso: '2026-11-26',
+    });
+
+    expect(due.next_due_km).toBe(13000);
+    expect(due.next_due_at).toBeNull();
+  });
+
   it('negeert een ongeldige stand of datum', () => {
     const due = baselineDueFields({
       baseline: { km: -5, doneAtIso: '10-03-2026' },
@@ -125,7 +153,30 @@ describe('eerste planning met baseline', () => {
     expect(plan[0]!.remainingKm).toBe(5550);
   });
 
-  it('rekent bij "net gekocht" eerlijk vanaf de huidige stand en vandaag', () => {
+  it('toont bij aankoop al echte vervalstanden vanaf de aankoop-km', () => {
+    const plan = buildMaintenancePlan({
+      items: [item],
+      schedules: [
+        scheduleFrom(
+          baselineDueFields({
+            baseline: { source: 'purchase', km: 10000, doneAtIso: null },
+            intervalKm: 6000,
+            intervalMonths: 12,
+            todayIso: '2026-11-26',
+          }),
+        ),
+      ],
+      currentKm: 12450,
+      fuelSystem: '2T',
+      today,
+    });
+
+    expect(plan[0]!.dueKm).toBe(16000);
+    expect(plan[0]!.dueAt).toBe('2027-11-26');
+    expect(plan[0]!.remainingKm).toBe(3550);
+  });
+
+  it('rekent zonder enige baseline eerlijk vanaf de huidige stand en vandaag', () => {
     const plan = buildMaintenancePlan({
       items: [item],
       schedules: [scheduleFrom(baselineDueFields({ baseline: null, intervalKm: 6000, intervalMonths: 12 }))],

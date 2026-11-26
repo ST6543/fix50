@@ -29,10 +29,11 @@ export default function OnboardingScreen({ navigation }: Props) {
   const [engine, setEngine] = useState<EngineFamily | null>(null);
   const [fuel, setFuel] = useState<'2T' | '4T' | 'Injectie' | null>(null);
   const [km, setKm] = useState('');
-  /** Laatste beurt: km + datum, of "net gekocht" (geen historie). */
+  /** Laatste beurt (km + datum) of alleen de stand bij aankoop. */
   const [baselineMode, setBaselineMode] = useState<'service' | 'new'>('service');
   const [serviceKm, setServiceKm] = useState('');
   const [serviceDate, setServiceDate] = useState('');
+  const [purchaseKm, setPurchaseKm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [skipBusy, setSkipBusy] = useState(false);
@@ -69,7 +70,26 @@ export default function OnboardingScreen({ navigation }: Props) {
         setError('De stand van je laatste beurt kan niet hoger zijn dan je huidige kilometerstand.');
         return;
       }
-      baseline = { km: Math.round(serviceKmNumber), doneAtIso };
+      baseline = { source: 'service', km: Math.round(serviceKmNumber), doneAtIso };
+    } else {
+      // Net gekocht: de stand bij aankoop is het startpunt van de planning.
+      const purchaseRaw = purchaseKm.trim();
+      const purchaseNumber = purchaseRaw ? Number(purchaseRaw.replace(',', '.')) : currentKm;
+      if (purchaseRaw && (!Number.isFinite(purchaseNumber) || purchaseNumber < 0)) {
+        setError('Vul een geldige aankoopkilometerstand in, of laat het veld leeg.');
+        return;
+      }
+      if (currentKm > 0 && Number.isFinite(purchaseNumber) && Math.round(purchaseNumber) > currentKm) {
+        setError('De aankoopstand kan niet hoger zijn dan je huidige kilometerstand.');
+        return;
+      }
+      if (purchaseRaw || currentKm > 0) {
+        baseline = {
+          source: 'purchase',
+          km: Math.max(0, Math.round(purchaseNumber)),
+          doneAtIso: null,
+        };
+      }
     }
 
     setBusy(true);
@@ -210,11 +230,21 @@ export default function OnboardingScreen({ navigation }: Props) {
                 />
               </View>
             </View>
-          ) : null}
+          ) : (
+            <View style={{ marginTop: spacing.m }}>
+              <Input
+                label="Aankoop-kilometerstand (mag leeg)"
+                value={purchaseKm}
+                onChangeText={setPurchaseKm}
+                keyboardType="number-pad"
+                placeholder={km.trim() ? km.trim() : '12450'}
+              />
+            </View>
+          )}
           <Text style={styles.baselineHint}>
             {baselineMode === 'service'
               ? 'We rekenen je eerste planning vanaf deze beurt, zodat de vervaldatums meteen kloppen.'
-              : 'Geen beurt bekend? We rekenen vanaf je huidige stand en vandaag, tot je een beurt registreert.'}
+              : 'We rekenen je eerste vervalstanden vanaf de aankoop-km en de vervaldatums vanaf vandaag. Laat je het veld leeg, dan gebruiken we je huidige stand.'}
           </Text>
 
           {error ? <ErrorText>{error}</ErrorText> : null}
