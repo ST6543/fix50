@@ -3,7 +3,7 @@ import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Badge, Button, Card, EmptyState, ErrorText, IconTile, Input } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, ErrorText, IconTile, Input, SkeletonScreen } from '@/components/ui';
 import { CameraIcon, DropletIcon, ImageIcon, PlusIcon, SendIcon } from '@/components/icons';
 import * as ImagePicker from 'expo-image-picker';
 import { shrinkForScan } from '@/lib/image-shrink';
@@ -103,7 +103,7 @@ export default function FuelScreen() {
     }, [reload]),
   );
 
-  if (loading) return null;
+  if (loading) return <SkeletonScreen />;
 
   if (!activeScooter) {
     return (

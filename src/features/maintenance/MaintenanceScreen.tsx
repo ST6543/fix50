@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
-import { Badge, Button, Card, EmptyState, Loading, SectionTitle } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, SectionTitle, SkeletonScreen } from '@/components/ui';
 import { AlertCircleIcon, ArrowRightIcon, MotoIcon, WrenchIcon } from '@/components/icons';
 import { PressableScale } from '@/components/motion';
 import { useScooters } from '@/hooks/useScooters';
@@ -96,7 +96,7 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
     await dismissReminder(id, status).catch(() => undefined);
   }
 
-  if (loading) return <Loading label="Onderhoudsplan laden…" />;
+  if (loading) return <SkeletonScreen />;
 
   if (!activeScooter) {
     return (

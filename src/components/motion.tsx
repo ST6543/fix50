@@ -27,9 +27,12 @@ export function FadeInView({
   style?: StyleProp<ViewStyle>;
 }) {
   const t = useRef(new Animated.Value(0)).current;
+  /** Alleen de eerste mount animeert; een nieuwe `index` laat niets opnieuw infaden. */
+  const started = useRef(false);
 
   useEffect(() => {
-    t.setValue(0);
+    if (started.current) return;
+    started.current = true;
     Animated.timing(t, {
       toValue: 1,
       duration,

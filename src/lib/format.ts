@@ -1,4 +1,39 @@
 /** Kleine opmaak-helpers (nl-NL). */
+export const WEEKDAYS_NL = [
+  'zondag',
+  'maandag',
+  'dinsdag',
+  'woensdag',
+  'donderdag',
+  'vrijdag',
+  'zaterdag',
+] as const;
+
+export const MONTHS_NL = [
+  'januari',
+  'februari',
+  'maart',
+  'april',
+  'mei',
+  'juni',
+  'juli',
+  'augustus',
+  'september',
+  'oktober',
+  'november',
+  'december',
+] as const;
+
+/** "woensdag 26 november" — voor de dagkop op Home. */
+export function longDateLabel(date: Date): string {
+  return `${WEEKDAYS_NL[date.getDay()] ?? ''} ${date.getDate()} ${MONTHS_NL[date.getMonth()] ?? ''}`;
+}
+
+/** "november 2026" — voor "lid sinds" en andere maand-and-jaar-labels. */
+export function monthYearLabel(date: Date): string {
+  return `${MONTHS_NL[date.getMonth()] ?? ''} ${date.getFullYear()}`;
+}
+
 export function formatKm(km: number | null | undefined): string {
   if (km === null || km === undefined) return '—';
   return `${km.toLocaleString('nl-NL')} km`;

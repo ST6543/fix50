@@ -7,7 +7,7 @@ import { RouteProp, useRoute } from '@react-navigation/native';
 import DiagnosisScreen from '@/features/diagnosis/DiagnosisScreen';
 import MaintenanceScreen from '@/features/maintenance/MaintenanceScreen';
 import { ChatIcon, WrenchIcon } from '@/components/icons';
-import { SegmentSwitch } from '@/components/ui';
+import { SegmentSwitch, TabHeader } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 
 type Segment = 'diagnose' | 'onderhoud';
@@ -29,6 +29,7 @@ export default function WorkshopScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <TabHeader title="Werkplaats" subtitle="Diagnose en onderhoud" />
       <SegmentSwitch segments={segments} value={segment} onChange={setSegment} style={styles.switchRow} />
       <View style={styles.body}>{segment === 'diagnose' ? <DiagnosisScreen embedded /> : <MaintenanceScreen embedded />}</View>
     </SafeAreaView>
@@ -37,6 +38,6 @@ export default function WorkshopScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  switchRow: { marginHorizontal: spacing.l, marginTop: spacing.m, marginBottom: spacing.s },
+  switchRow: { marginHorizontal: spacing.l, marginTop: spacing.s, marginBottom: spacing.s },
   body: { flex: 1 },
 });

@@ -26,7 +26,8 @@ export const colors = {
   hairline: 'rgba(255,255,255,0.06)',
   text: '#E6E8EB',
   textMuted: '#9BA1AB',
-  textSubtle: '#6B7280',
+  /** Iets lichter dan voorheen: kleine tekst haalt nu ruim 4,5:1 op de achtergrond. */
+  textSubtle: '#8A92A0',
   primary: '#FF6B00',
   primaryLight: '#FF7A00',
   primaryDim: '#D65900',

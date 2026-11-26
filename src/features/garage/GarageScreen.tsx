@@ -8,7 +8,7 @@ import TuningScreen from '@/features/tuning/TuningScreen';
 import PerformanceScreen from '@/features/performance/PerformanceScreen';
 import FuelScreen from '@/features/fuel/FuelScreen';
 import { DropletIcon, GaugeIcon, SlidersIcon } from '@/components/icons';
-import { SegmentSwitch } from '@/components/ui';
+import { SegmentSwitch, TabHeader } from '@/components/ui';
 import { colors, spacing } from '@/theme';
 
 type Segment = 'tuning' | 'gpstest' | 'tankbeurten';
@@ -31,6 +31,7 @@ export default function GarageScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <TabHeader title="Garage" subtitle="Tuning, tankbeurten en metingen" />
       <SegmentSwitch segments={segments} value={segment} onChange={setSegment} style={styles.switchRow} />
       <View style={styles.body}>
         {segment === 'tuning' ? (
@@ -47,6 +48,6 @@ export default function GarageScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  switchRow: { marginHorizontal: spacing.l, marginTop: spacing.m, marginBottom: spacing.s },
+  switchRow: { marginHorizontal: spacing.l, marginTop: spacing.s, marginBottom: spacing.s },
   body: { flex: 1 },
 });

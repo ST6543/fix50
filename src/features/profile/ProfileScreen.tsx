@@ -11,32 +11,18 @@ import { BellIcon, CameraIcon, ChevronRightIcon, GearIcon, LockIcon, MotoIcon, U
 import { useAuth } from '@/hooks/useAuth';
 import { useScooters } from '@/hooks/useScooters';
 import * as scootersService from '@/services/scooters';
+import { monthYearLabel } from '@/lib/format';
 import { colors, fonts, radii, spacing, typography } from '@/theme';
 import type { Profile } from '@/types';
 
 type Nav = AppNav;
-
-const MONTHS = [
-  'januari',
-  'februari',
-  'maart',
-  'april',
-  'mei',
-  'juni',
-  'juli',
-  'augustus',
-  'september',
-  'oktober',
-  'november',
-  'december',
-];
 
 /** "Lid sinds maart 2025" op basis van het echte aanmaakmoment van het profiel. */
 function memberSince(profile: Profile | null): string | null {
   if (!profile?.created_at) return null;
   const d = new Date(profile.created_at);
   if (Number.isNaN(d.getTime())) return null;
-  return `Lid sinds ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  return `Lid sinds ${monthYearLabel(d)}`;
 }
 
 export default function ProfileScreen() {

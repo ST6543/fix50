@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { AppNav, TabNav } from '@/navigation/types';
 
-import { Badge, Card, Eyebrow, IconTile, SectionTitle } from '@/components/ui';
+import { Badge, Card, Eyebrow, IconTile, SectionTitle, SkeletonScreen } from '@/components/ui';
 import { estimateCurrentKm, kmAnchorLabel } from '@/lib/km-estimate';
 import { SpeedChart } from '@/components/charts';
 import { FadeInView } from '@/components/motion';
@@ -25,27 +25,11 @@ import { computeFuelStats, listFuelLogs } from '@/services/fuel';
 import { listSetups } from '@/services/tuning';
 import { buildInsights, applyAiVerwoording, type Insight, type AiVerwoordingItem } from '@/lib/insights';
 import { fetchAiVerwoording } from '@/services/ai-insights';
-import { formatKmShort, timeAgo } from '@/lib/format';
+import { formatKmShort, longDateLabel, timeAgo } from '@/lib/format';
 import { colors, fonts, layout, radii, spacing, typography } from '@/theme';
 import type { MaintenanceReminder, PerformanceRun, WeekTask } from '@/types';
 
 type Nav = AppNav;
-
-const WEEKDAYS = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
-const MONTHS = [
-  'januari',
-  'februari',
-  'maart',
-  'april',
-  'mei',
-  'juni',
-  'juli',
-  'augustus',
-  'september',
-  'oktober',
-  'november',
-  'december',
-];
 
 /** Begroeting op basis van het uur van de dag — geen data, puur presentatie. */
 function greetingFor(date: Date): string {
@@ -54,10 +38,6 @@ function greetingFor(date: Date): string {
   if (h < 12) return 'Goedemorgen';
   if (h < 18) return 'Goedemiddag';
   return 'Goedenavond';
-}
-
-function todayLabel(date: Date): string {
-  return `${WEEKDAYS[date.getDay()]} ${date.getDate()} ${MONTHS[date.getMonth()]}`;
 }
 
 export default function HomeScreen() {
@@ -78,7 +58,6 @@ export default function HomeScreen() {
     useCallback(() => {
       let alive = true;
       (async () => {
-        setLoading(true);
         try {
           if (activeScooter) {
             const [items, schedules, rems, fuelLogs, setups, runs] = await Promise.all([
@@ -147,7 +126,7 @@ export default function HomeScreen() {
     [insights, aiVer],
   );
 
-  if (scootersLoading || loading) return <Loading />;
+  if (scootersLoading || loading) return <SkeletonScreen />;
 
   const now = new Date();
   const estimate = activeScooter ? estimateCurrentKm(activeScooter) : null;
@@ -182,7 +161,7 @@ export default function HomeScreen() {
         <View style={styles.topbar}>
           <View style={styles.topbarText}>
             <Text style={styles.today} numberOfLines={1}>
-              {todayLabel(now)}
+              {longDateLabel(now)}
             </Text>
             <Text style={styles.greeting} numberOfLines={2}>
               {greetingFor(now)}
@@ -493,14 +472,6 @@ export default function HomeScreen() {
   );
 }
 
-function Loading() {
-  return (
-    <View style={styles.loadingWrap}>
-      <Text style={styles.loadingText}>Dashboard laden…</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   content: {
@@ -511,9 +482,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  loadingText: { color: colors.textMuted, fontFamily: fonts.body },
-
   // Kop
   topbar: {
     flexDirection: 'row',

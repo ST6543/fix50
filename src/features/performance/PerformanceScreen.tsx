@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
-import { Badge, Button, Card, EmptyState, IconTile, Loading, SectionTitle } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, IconTile, SectionTitle, SkeletonScreen } from '@/components/ui';
 import { SpeedChart } from '@/components/charts';
 import { FadeInView } from '@/components/motion';
 import { AlertCircleIcon, FlagIcon, GaugeIcon, ShieldIcon, TimerIcon, TrendingUpIcon } from '@/components/icons';
@@ -38,7 +38,7 @@ export default function PerformanceScreen({ embedded = false }: { embedded?: boo
   const best80 = perfService.bestRun(runs, 't0_80_s');
   const bestTop = perfService.bestRun(runs, 'max_speed_kmh');
 
-  if (loading) return <Loading label="Metingen laden…" />;
+  if (loading) return <SkeletonScreen />;
 
   return (
     <SafeAreaView style={styles.safe} edges={embedded ? [] : ['top']}>

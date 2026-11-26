@@ -680,6 +680,57 @@ export function EmptyState({
   );
 }
 
+/** Compacte schermkop voor tabs: één titel, één regel context. */
+export function TabHeader({
+  title,
+  subtitle,
+  right,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <View style={styles.tabHeader}>
+      <View style={styles.tabHeaderText}>
+        <Text style={styles.tabHeaderTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.tabHeaderSub}>{subtitle}</Text> : null}
+      </View>
+      {right}
+    </View>
+  );
+}
+
+/** Rustige plaatshouder voor laadcontent — geen spinners meer op de hoofdtabbladen. */
+export function Skeleton({
+  width,
+  height = 12,
+  style,
+}: {
+  width?: number | `${number}%`;
+  height?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return <View style={[styles.skeletonBlock, { width, height }, style]} />;
+}
+
+/** Volledig scherm-skelet: kop, ondertitel en een paar kaarten. */
+export function SkeletonScreen({ cards = 3 }: { cards?: number }) {
+  return (
+    <View style={styles.skeletonScreen}>
+      <Skeleton width={96} height={10} />
+      <Skeleton width={210} height={26} style={{ marginTop: spacing.s }} />
+      {Array.from({ length: cards }, (_, i) => (
+        <View key={i} style={styles.skeletonCard}>
+          <Skeleton width="42%" height={13} />
+          <Skeleton width="72%" height={10} style={{ marginTop: spacing.s }} />
+          <Skeleton width="30%" height={10} style={{ marginTop: spacing.s }} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function Loading({ label = 'Gegevens laden…' }: { label?: string }) {
   return (
     <View style={styles.loading}>
@@ -882,6 +933,41 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger, fontFamily: fonts.body, fontSize: 13, marginTop: spacing.xs },
   empty: { alignItems: 'center', paddingVertical: spacing.xxl, paddingHorizontal: spacing.xl },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xxl },
+  tabHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.m,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.s,
+  },
+  tabHeaderText: { flex: 1 },
+  tabHeaderTitle: {
+    fontFamily: fonts.displayBold,
+    fontSize: 21,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: -0.5,
+  },
+  tabHeaderSub: {
+    fontFamily: fonts.body,
+    fontSize: 12.5,
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+  skeletonScreen: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: layout.screenPadding,
+  },
+  skeletonBlock: { backgroundColor: colors.surfaceHigh, borderRadius: 6, opacity: 0.75 },
+  skeletonCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderSoft,
+    borderRadius: radii.l,
+    padding: layout.cardPadding,
+    marginTop: spacing.m,
+  },
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',

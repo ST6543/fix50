@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
-import { Badge, Button, Card, EmptyState, Loading, SectionTitle } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, SectionTitle, SkeletonScreen } from '@/components/ui';
 import {
   ChevronRightIcon,
   ClipboardIcon,
@@ -81,7 +81,7 @@ export default function TuningScreen({ embedded = false }: { embedded?: boolean 
     ]);
   }
 
-  if (loading) return <Loading label="Tuning laden…" />;
+  if (loading) return <SkeletonScreen />;
 
   return (
     <SafeAreaView style={styles.safe} edges={embedded ? [] : ['top']}>
