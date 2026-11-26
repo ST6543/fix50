@@ -1,6 +1,7 @@
 /** Onderhouds-service: schedules, records, reminders en weeklogica. */
 import { query } from './api';
 import { supabase } from '@/lib/supabase';
+import { appliesToFuelSystem } from '@/lib/maintenance-plan';
 import type {
   MaintenanceItem,
   MaintenanceRecord,
@@ -32,36 +33,37 @@ export async function listSchedules(scooterId: UUID): Promise<MaintenanceSchedul
   );
 }
 
-/** Maakt (of actualiseert) schedules voor alle items die bij het brandstofsysteem passen. */
+/**
+ * Maakt schedules aan voor alle items die bij het brandstofsysteem passen.
+ *
+ * Startpunt is de ondergrens van het adviesbereik — dat is het controlemoment;
+ * het bovenste getal is het vervangmoment. Bestaande rijen blijven ongemoeid
+ * (ignoreDuplicates), zodat een zelf aangepast interval nooit wordt overschreven.
+ */
 export async function ensureSchedulesForScooter(scooter: {
   id: UUID;
   fuel_system: string | null;
 }): Promise<void> {
   const items = await listMaintenanceItems();
-  const applies = (i: MaintenanceItem): boolean => {
-    if (scooter.fuel_system === '2T') return i.applies_2t;
-    if (scooter.fuel_system === '4T') return i.applies_4t;
-    if (scooter.fuel_system === 'Injectie') return i.applies_injectie;
-    return true;
-  };
-  const relevant = items.filter(applies);
-  if (relevant.length === 0) return;
+  const rows = items
+    .filter((item) => appliesToFuelSystem(item, scooter.fuel_system))
+    .map((item) => ({
+      scooter_id: scooter.id,
+      item_id: item.id,
+      interval_km: item.interval_km_min ?? item.interval_km_max,
+      interval_months: item.interval_months_min ?? item.interval_months_max,
+      enabled: true,
+    }))
+    // Onderdelen zonder enig interval ("bij afwijking") horen niet in een plan.
+    .filter((row) => row.interval_km !== null || row.interval_months !== null);
+  if (rows.length === 0) return;
 
-  // Mid-range interval als startpunt (Excel geeft ranges; configureerbaar per scooter).
-  const rows = relevant.map((i) => ({
-    scooter_id: scooter.id,
-    item_id: i.id,
-    interval_km:
-      i.interval_km_min !== null && i.interval_km_max !== null
-        ? Math.round((i.interval_km_min + i.interval_km_max) / 2)
-        : null,
-    interval_months:
-      i.interval_months_min !== null && i.interval_months_max !== null
-        ? Math.round((i.interval_months_min + i.interval_months_max) / 2)
-        : null,
-    enabled: true,
-  }));
-  await query<void>(() => supabase.from('maintenance_schedules').upsert(rows, { onConflict: 'scooter_id,item_id' }));
+  await query<void>(() =>
+    supabase.from('maintenance_schedules').upsert(rows, {
+      onConflict: 'scooter_id,item_id',
+      ignoreDuplicates: true,
+    }),
+  );
 }
 
 export async function updateSchedule(
