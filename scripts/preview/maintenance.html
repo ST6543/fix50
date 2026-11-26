@@ -81,6 +81,21 @@
   .conclusion .line:last-child { border-bottom: none; }
   .conclusion .line b { font-family: 'FIX50 Grotesk', Helvetica, Arial, sans-serif; font-weight: 700; font-size: 10.5px; white-space: nowrap; }
 
+  /* ── Factuur: regeltabel en totalen ───────────────────────────── */
+  table.history.invoice td:nth-child(3) { white-space: normal; }
+  table.history.invoice td { padding: 8px 9px; }
+  table.history.invoice .line-sub { display: block; margin-top: 2px; color: #7A7D85; font-size: 8.3px; }
+  table.history.invoice .amount { text-align: right; font-family: 'FIX50 Grotesk', Helvetica, Arial, sans-serif; font-weight: 700; font-size: 10px; white-space: nowrap; }
+  .invoice-total { margin-left: auto; width: 280px; margin-top: 10px; border: 1px solid #D9DAD5; background: #fff; }
+  .invoice-total .row { display: flex; justify-content: space-between; gap: 12px; padding: 6.5px 11px; border-bottom: 1px solid #E7E8E3; font-size: 9.5px; }
+  .invoice-total .row:last-child { border-bottom: none; }
+  .invoice-total .row .k { font-family: 'FIX50 Grotesk', Helvetica, Arial, sans-serif; font-size: 7.6px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #7A7D85; }
+  .invoice-total .row .v { font-family: 'FIX50 Grotesk', Helvetica, Arial, sans-serif; font-weight: 700; white-space: nowrap; }
+  .invoice-total .row.grand { background: #141518; color: #fff; padding: 8px 11px; }
+  .invoice-total .row.grand .k { color: #B9BCC4; }
+  .invoice-total .row.grand .v { color: #F97316; font-size: 14px; }
+  .invoice-note { margin-top: 9px; font-size: 8.6px; line-height: 1.5; color: #7A7D85; }
+
   .muted { color: #7A7D85; }
 
   /* ── Authenticiteitsvoet (stempel) ────────────────────────────── */

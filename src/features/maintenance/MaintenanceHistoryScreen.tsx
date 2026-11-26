@@ -8,7 +8,7 @@ import { Badge, Button, Card, EmptyState, Loading } from '@/components/ui';
 import { ClipboardIcon, SendIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import { listMaintenanceItems, listRecords } from '@/services/maintenance';
-import { exportMaintenancePdf } from '@/services/pdf-export';
+import { exportInvoicePdf, exportMaintenancePdf } from '@/services/pdf-export';
 import { buildMaintenanceSummary, shareMaintenanceLog } from '@/lib/export';
 import { formatDateTime, formatKm } from '@/lib/format';
 import { colors, fonts, spacing, typography } from '@/theme';
@@ -26,6 +26,7 @@ export default function MaintenanceHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [invoiceBusy, setInvoiceBusy] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -64,6 +65,24 @@ export default function MaintenanceHistoryScreen() {
       Alert.alert('Delen mislukt', 'Kon het logboek niet delen. Probeer het opnieuw.');
     } finally {
       setSharing(false);
+    }
+  }
+
+  async function handleInvoice() {
+    if (!activeScooter) return;
+    setInvoiceBusy(true);
+    try {
+      await exportInvoicePdf(activeScooter);
+    } catch (err) {
+      console.error('[pdf] Factuur mislukt', err);
+      Alert.alert(
+        'Factuur mislukt',
+        err instanceof Error && err.message
+          ? err.message
+          : 'Kon de factuur niet maken. Probeer het opnieuw.',
+      );
+    } finally {
+      setInvoiceBusy(false);
     }
   }
 
@@ -117,6 +136,13 @@ export default function MaintenanceHistoryScreen() {
                   icon={<ClipboardIcon size={16} color={colors.background} />}
                   onPress={handlePdf}
                   loading={pdfBusy}
+                />
+                <Button
+                  label="Factuur (PDF)"
+                  variant="secondary"
+                  icon={<ClipboardIcon size={16} color={colors.text} />}
+                  onPress={handleInvoice}
+                  loading={invoiceBusy}
                 />
                 <Button
                   label="Logboek delen (CSV)"

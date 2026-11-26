@@ -51,6 +51,16 @@ export function docNumber(scooterId: string): string {
   return `DOC-${base}-NL`;
 }
 
+/**
+ * Factuurnummer voor particulier gebruik: stabiel per scooter en dag.
+ * Geen fiscale reeks — hetzelfde document krijgt bij opnieuw genereren
+ * hetzelfde nummer.
+ */
+export function invoiceNumberFor(scooterId: string, isoDate: string): string {
+  const suffix = scooterId.replace(/-/g, '').toUpperCase().slice(-4) || '0000';
+  return `F50-${isoDate.slice(0, 10).replace(/-/g, '')}-${suffix}`;
+}
+
 /** 2,3 L/100km → 43,5 km per liter ("1 op 43,5"). */
 export function kmPerLiterFromL100(lPer100km: number): number {
   return lPer100km > 0 ? 100 / lPer100km : 0;
@@ -176,6 +186,21 @@ const BASE_CSS = `
   .conclusion .line { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dashed #D9DAD5; }
   .conclusion .line:last-child { border-bottom: none; }
   .conclusion .line b { font-family: 'FIX50 Grotesk', Helvetica, Arial, sans-serif; font-weight: 700; font-size: 10.5px; white-space: nowrap; }
+
+  /* ── Factuur: regeltabel en totalen ───────────────────────────── */
+  table.history.invoice td:nth-child(3) { white-space: normal; }
+  table.history.invoice td { padding: 8px 9px; }
+  table.history.invoice .line-sub { display: block; margin-top: 2px; color: #7A7D85; font-size: 8.3px; }
+  table.history.invoice .amount { text-align: right; font-family: 'FIX50 Grotesk', Helvetica, Arial, sans-serif; font-weight: 700; font-size: 10px; white-space: nowrap; }
+  .invoice-total { margin-left: auto; width: 280px; margin-top: 10px; border: 1px solid #D9DAD5; background: #fff; }
+  .invoice-total .row { display: flex; justify-content: space-between; gap: 12px; padding: 6.5px 11px; border-bottom: 1px solid #E7E8E3; font-size: 9.5px; }
+  .invoice-total .row:last-child { border-bottom: none; }
+  .invoice-total .row .k { font-family: 'FIX50 Grotesk', Helvetica, Arial, sans-serif; font-size: 7.6px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #7A7D85; }
+  .invoice-total .row .v { font-family: 'FIX50 Grotesk', Helvetica, Arial, sans-serif; font-weight: 700; white-space: nowrap; }
+  .invoice-total .row.grand { background: #141518; color: #fff; padding: 8px 11px; }
+  .invoice-total .row.grand .k { color: #B9BCC4; }
+  .invoice-total .row.grand .v { color: #F97316; font-size: 14px; }
+  .invoice-note { margin-top: 9px; font-size: 8.6px; line-height: 1.5; color: #7A7D85; }
 
   .muted { color: #7A7D85; }
 
@@ -453,7 +478,158 @@ ${pageFoot({
 }
 
 // ---------------------------------------------------------------------------
-// 2. PERFORMANCE & TUNING RAPPORT (pagina 2)
+// 2. FACTUUR (particuliere kostenadministratie)
+// ---------------------------------------------------------------------------
+
+export interface InvoicePdfLine {
+  /** Regelomschrijving, bijv. "Oliewissel". */
+  description: string;
+  /** Optionele toelichting onder de omschrijving (bijv. gebruikte onderdelen). */
+  detail?: string | null;
+  doneAtIso: string;
+  km: number | null;
+  /** Bedrag in centen; null = geen bedrag geregistreerd. */
+  amountCents: number | null;
+}
+
+export interface InvoicePdfInput {
+  scooter: {
+    id: string;
+    name: string;
+    brand: string | null;
+    model: string | null;
+    year?: number | null;
+    license_plate: string | null;
+    fuel_system?: string | null;
+    current_km: number;
+  };
+  ownerName: string | null;
+  /** Onderhoudsregels; de builder sorteert chronologisch. */
+  lines: InvoicePdfLine[];
+  /** Wordt afgeleid van scooter + datum als hij ontbreekt. */
+  invoiceNumber?: string;
+  issuedAtIso?: string;
+  generatedAtIso?: string;
+}
+
+/**
+ * Factuur in dezelfde dossierstijl: caliper, merklockup en de donkere
+ * regeltabel. Particulier: geen btw, geen bedrijfsgegevens, geen publieke
+ * verify-link — alleen wat de gebruiker zelf heeft geregistreerd.
+ */
+export function buildInvoiceHtml(input: InvoicePdfInput): string {
+  const { scooter } = input;
+  const generatedAt = input.generatedAtIso ?? new Date().toISOString();
+  const issuedAt = input.issuedAtIso ?? generatedAt;
+  const number = input.invoiceNumber ?? invoiceNumberFor(scooter.id, issuedAt);
+  const lines = [...input.lines].sort((a, b) => a.doneAtIso.localeCompare(b.doneAtIso));
+  const totalCents = lines.reduce((sum, line) => sum + (line.amountCents ?? 0), 0);
+  const pricedLines = lines.filter((line) => line.amountCents !== null).length;
+  const modelLine = [scooter.brand, scooter.model, scooter.year ? String(scooter.year) : null]
+    .filter(Boolean)
+    .join(' ');
+  const first = lines[0];
+  const last = lines[lines.length - 1];
+  const period =
+    first && last
+      ? first === last
+        ? nlDate(first.doneAtIso)
+        : `${nlDate(first.doneAtIso)} t/m ${nlDate(last.doneAtIso)}`
+      : '—';
+
+  const lineRows = lines
+    .map((line, index) => {
+      const detail = line.detail
+        ? `<span class="line-sub">${escapeHtml(line.detail)}</span>`
+        : '';
+      return `
+      <tr>
+        <td class="ref">#${String(index + 1).padStart(2, '0')}</td>
+        <td>${escapeHtml(nlDate(line.doneAtIso))}</td>
+        <td>${escapeHtml(line.description)}${detail}</td>
+        <td class="num">${line.km !== null ? `${escapeHtml(kmDot(line.km))} km` : '—'}</td>
+        <td class="amount">${line.amountCents !== null ? escapeHtml(euroCents(line.amountCents)) : '—'}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const linesTable = `<table class="history invoice">
+      <thead><tr><th>Regel</th><th>Datum</th><th>Omschrijving</th><th>Km-stand</th><th>Bedrag</th></tr></thead>
+      <tbody>${
+        lineRows ||
+        '<tr><td colspan="5" class="muted">Nog geen onderhoud geregistreerd voor dit voertuig.</td></tr>'
+      }</tbody>
+    </table>`;
+
+  const unpaidNote =
+    pricedLines < lines.length
+      ? ' Regels zonder bedrag tellen niet mee in het totaal.'
+      : '';
+
+  return `${pageHead({
+    title: 'Factuur',
+    subtitle: 'Kostenoverzicht van je onderhoud',
+    docTag: 'Particulier',
+    docSub: `Factuurnummer ${number}`,
+    scooterId: scooter.id,
+    plateText: scooter.license_plate,
+  })}
+  <div class="section">
+    <div class="section-head">
+      <span class="tick"></span>
+      <h2>Factuurgegevens</h2>
+      <span class="rule"></span>
+    </div>
+    <div class="veh">
+    <table class="tech"><tbody>
+      <tr><td class="k">Factuurnummer</td><td><strong>${escapeHtml(number)}</strong></td></tr>
+      <tr><td class="k">Factuurdatum</td><td>${escapeHtml(nlDate(issuedAt))}</td></tr>
+      <tr><td class="k">Periode</td><td>${escapeHtml(period)}</td></tr>
+      <tr><td class="k">Opgesteld voor</td><td><strong>${escapeHtml(input.ownerName ?? 'Eigenaar')}</strong></td></tr>
+    </tbody></table>
+    <table class="tech"><tbody>
+      <tr><td class="k">Voertuig</td><td><strong>${escapeHtml(modelLine || scooter.name)}</strong></td></tr>
+      ${scooter.license_plate ? `<tr><td class="k">Kenteken</td><td><strong>${escapeHtml(scooter.license_plate.toUpperCase())}</strong></td></tr>` : ''}
+      ${scooter.fuel_system ? `<tr><td class="k">Brandstofsysteem</td><td>${escapeHtml(scooter.fuel_system)}</td></tr>` : ''}
+      <tr><td class="k">Kilometerstand</td><td><strong>${escapeHtml(kmDot(scooter.current_km))} km</strong></td></tr>
+    </tbody></table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <span class="tick"></span>
+      <h2>Factuurregels</h2>
+      <span class="rule"></span>
+      <span class="count-chip">${lines.length} ${lines.length === 1 ? 'regel' : 'regels'}</span>
+    </div>
+    <div class="section-sub">Onderhoud en onderdelen, chronologisch</div>
+    ${linesTable}
+    <div class="invoice-total">
+      <div class="row"><span class="k">Regels</span><span class="v">${lines.length}</span></div>
+      <div class="row"><span class="k">Met bedrag</span><span class="v">${pricedLines} van ${lines.length}</span></div>
+      <div class="row grand"><span class="k">Totaal</span><span class="v">${escapeHtml(euroCents(totalCents))}</span></div>
+    </div>
+    <p class="invoice-note">Bedragen zijn wat je zelf hebt geregistreerd.${unpaidNote}</p>
+  </div>
+
+  <div class="foot">
+    <div class="col left">
+      <div class="lbl">Particuliere administratie</div>
+      <div class="meta">Kostenoverzicht van zelf geregistreerd onderhoud. Dit is geen officiële fiscale factuur; er is geen btw berekend of verrekend.</div>
+      <div class="meta">Gegenereerd door FIX50 App op ${escapeHtml(nlDate(generatedAt))}</div>
+    </div>
+    <div class="col right">
+      <div class="lbl">Documentnummer</div>
+      <div class="code">${escapeHtml(number)}</div>
+      <div class="stamp">Kostenoverzicht · <span style="color:#F97316;">FIX50</span></div>
+    </div>
+  </div>
+</div></body></html>`;
+}
+
+// ---------------------------------------------------------------------------
+// 3. PERFORMANCE & TUNING RAPPORT (pagina 2)
 // ---------------------------------------------------------------------------
 
 export interface TuningPdfRun {

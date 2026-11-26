@@ -8,8 +8,10 @@
 import { Platform } from 'react-native';
 
 import {
+  buildInvoiceHtml,
   buildMaintenancePassHtml,
   buildTuningPassHtml,
+  invoiceNumberFor,
   nlDate,
   type MaintenancePdfPlanningItem,
   type MaintenancePdfRecord,
@@ -213,6 +215,41 @@ export async function exportMaintenancePdf(scooter: Scooter): Promise<void> {
   });
 
   await renderAndShare(html, sanitizeFileName(`FIX50-Onderhoudspaspoort-${scooter.name}`));
+}
+
+/**
+ * Factuur genereren (particulier): alle geregistreerde onderhoudsbeurten met
+ * hun bedrag, in dezelfde dossierstijl als het onderhoudsboekje.
+ */
+export async function exportInvoicePdf(scooter: Scooter): Promise<void> {
+  const [records, items, owner] = await Promise.all([
+    listRecords(scooter.id, 200),
+    listMaintenanceItems().catch(() => []),
+    ownerName(),
+  ]);
+
+  const resolveName = nameResolver(items);
+  const issuedAt = new Date().toISOString();
+  const number = invoiceNumberFor(scooter.id, issuedAt);
+
+  const html = buildInvoiceHtml({
+    scooter: {
+      ...scooterBlock(scooter),
+      fuel_system: scooter.fuel_system,
+    },
+    ownerName: owner,
+    invoiceNumber: number,
+    issuedAtIso: issuedAt,
+    lines: records.map((r) => ({
+      description: resolveName(r),
+      detail: r.parts,
+      doneAtIso: r.done_at,
+      km: r.km_at_service,
+      amountCents: r.cost_cents,
+    })),
+  });
+
+  await renderAndShare(html, sanitizeFileName(`FIX50-Factuur-${number}`));
 }
 
 /**

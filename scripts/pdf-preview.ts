@@ -4,7 +4,12 @@
  * beoordeeld kan worden. Run: npx tsx scripts/pdf-preview.ts
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { buildMaintenancePassHtml, buildTuningPassHtml } from '../src/lib/pdf';
+import {
+  buildInvoiceHtml,
+  buildMaintenancePassHtml,
+  buildTuningPassHtml,
+  invoiceNumberFor,
+} from '../src/lib/pdf';
 
 /** Voorbeeldfoto (inline SVG als data-URI) om de fotokaart in de preview te zien. */
 const demoPhoto =
@@ -102,4 +107,24 @@ writeFileSync(
   }),
 );
 
-console.log('scripts/preview/maintenance.html + scripts/preview/tuning.html geschreven.');
+writeFileSync(
+  'scripts/preview/invoice.html',
+  buildInvoiceHtml({
+    scooter,
+    ownerName: 'Stefan',
+    invoiceNumber: invoiceNumberFor(scooter.id, '2026-10-07T10:00:00.000Z'),
+    issuedAtIso: '2026-10-07T10:00:00.000Z',
+    generatedAtIso: '2026-10-07T10:00:00.000Z',
+    lines: records.map((r) => ({
+      description: r.name,
+      detail: r.parts,
+      doneAtIso: r.doneAtIso,
+      km: r.km,
+      amountCents: r.costCents,
+    })),
+  }),
+);
+
+console.log(
+  'scripts/preview/maintenance.html + tuning.html + invoice.html geschreven.',
+);
