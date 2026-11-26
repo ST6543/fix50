@@ -26,7 +26,17 @@ import { ClipboardIcon, SendIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import { useMaintenanceData } from '@/hooks/useAppData';
 import { listRecords } from '@/services/maintenance';
-import { exportInvoicePdf, exportMaintenancePdf } from '@/services/pdf-export';
+import { listInvoices } from '@/services/invoices';
+import {
+  exportInvoicePdf,
+  exportMaintenancePdf,
+  exportStoredInvoicePdf,
+} from '@/services/pdf-export';
+import {
+  invoiceSelectionLabel,
+  invoiceSnapshotTotal,
+  type InvoiceRegisterEntry,
+} from '@/lib/invoice-snapshot';
 import { shareMaintenanceLog } from '@/lib/export';
 import {
   defaultPeriod,
@@ -50,10 +60,13 @@ export default function MaintenanceHistoryScreen() {
   const { activeScooter } = useScooters();
   const { items } = useMaintenanceData();
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
+  /** Eerder uitgegeven facturen: nummer + bevroren snapshot. */
+  const [invoices, setInvoices] = useState<InvoiceRegisterEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
+  const [reprintingId, setReprintingId] = useState<string | null>(null);
 
   // Factuurkeuze: periode (standaard deze maand) of één losse beurt.
   const [invoiceOpen, setInvoiceOpen] = useState(false);
@@ -68,9 +81,15 @@ export default function MaintenanceHistoryScreen() {
         setLoading(false);
         return;
       }
-      listRecords(activeScooter.id, 200)
-        .then(setRecords)
-        .catch(() => setRecords([]))
+      Promise.all([
+        listRecords(activeScooter.id, 200).catch(() => [] as MaintenanceRecord[]),
+        // Register is optioneel zolang de migratie nog niet is toegepast.
+        listInvoices(activeScooter.id, 25).catch(() => [] as InvoiceRegisterEntry[]),
+      ])
+        .then(([nextRecords, nextInvoices]) => {
+          setRecords(nextRecords);
+          setInvoices(nextInvoices);
+        })
         .finally(() => setLoading(false));
     }, [activeScooter]),
   );
@@ -151,6 +170,10 @@ export default function MaintenanceHistoryScreen() {
     try {
       await exportInvoicePdf(activeScooter, selection);
       setInvoiceOpen(false);
+      // Net uitgegeven factuur meteen in het register tonen.
+      listInvoices(activeScooter.id, 25)
+        .then(setInvoices)
+        .catch(() => undefined);
     } catch (err) {
       console.error('[pdf] Factuur mislukt', err);
       Alert.alert(
@@ -161,6 +184,24 @@ export default function MaintenanceHistoryScreen() {
       );
     } finally {
       setInvoiceBusy(false);
+    }
+  }
+
+  /** Eerder gedeelde factuur opnieuw delen — uit het opgeslagen snapshot. */
+  async function handleReprint(entry: InvoiceRegisterEntry) {
+    setReprintingId(entry.id);
+    try {
+      await exportStoredInvoicePdf(entry);
+    } catch (err) {
+      console.error('[pdf] Factuur opnieuw delen mislukt', err);
+      Alert.alert(
+        'Opnieuw delen mislukt',
+        err instanceof Error && err.message
+          ? err.message
+          : 'Kon de factuur niet opnieuw maken. Probeer het opnieuw.',
+      );
+    } finally {
+      setReprintingId(null);
     }
   }
 
@@ -228,6 +269,37 @@ export default function MaintenanceHistoryScreen() {
                   onPress={handleShare}
                   loading={sharing}
                 />
+              </View>
+            ) : null}
+            {invoices.length > 0 ? (
+              <View style={styles.invoiceBlock}>
+                <Text style={typography.eyebrow}>Facturen</Text>
+                {invoices.map((entry) => (
+                  <View key={entry.id} style={styles.invoiceRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.invoiceNo}>{entry.invoice_number}</Text>
+                      <Text style={styles.invoiceMeta} numberOfLines={2}>
+                        {formatDate(entry.issued_at)} · {euros(invoiceSnapshotTotal(entry.snapshot))} ·{' '}
+                        {invoiceSelectionLabel(entry.selection)}
+                      </Text>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Factuur ${entry.invoice_number} opnieuw delen`}
+                      disabled={reprintingId !== null}
+                      onPress={() => void handleReprint(entry)}
+                      style={({ pressed }) => [styles.reprintBtn, pressed && { opacity: 0.7 }]}
+                    >
+                      <Text style={styles.reprintLabel}>
+                        {reprintingId === entry.id ? 'Bezig…' : 'Opnieuw'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ))}
+                <Text style={styles.invoiceHint}>
+                  Elke factuur bewaart zijn eigen regels en bedragen; opnieuw delen geeft
+                  hetzelfde document.
+                </Text>
               </View>
             ) : null}
           </Card>
@@ -373,6 +445,38 @@ const styles = StyleSheet.create({
   summaryLabel: { ...typography.eyebrow },
   summaryValue: { fontFamily: fonts.displayBold, fontSize: 20, fontWeight: '700', color: colors.text, marginTop: 2 },
   summarySub: { color: colors.textSubtle, fontFamily: fonts.body, fontSize: 11.5, marginTop: 2 },
+  invoiceBlock: {
+    marginTop: spacing.m,
+    paddingTop: spacing.m,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSoft,
+    gap: spacing.s,
+  },
+  invoiceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, minHeight: 44 },
+  invoiceNo: {
+    color: colors.text,
+    fontFamily: fonts.display,
+    fontSize: 13.5,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  invoiceMeta: { color: colors.textMuted, fontFamily: fonts.body, fontSize: 12, marginTop: 2 },
+  reprintBtn: {
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    backgroundColor: colors.primarySubtle,
+    paddingHorizontal: spacing.m,
+    paddingVertical: 6,
+  },
+  reprintLabel: { color: colors.primary, fontFamily: fonts.display, fontSize: 12, fontWeight: '600' },
+  invoiceHint: {
+    color: colors.textSubtle,
+    fontFamily: fonts.body,
+    fontSize: 11.5,
+    lineHeight: 16,
+    marginTop: 2,
+  },
   shareBtn: { marginTop: spacing.m },
   card: { marginBottom: spacing.m },
   name: { color: colors.text, fontWeight: '700', flexShrink: 1, marginRight: spacing.s },

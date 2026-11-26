@@ -9,7 +9,10 @@ import { configure, fireEvent, render, screen, waitFor } from '@testing-library/
 import MaintenanceHistoryScreen from '@/features/maintenance/MaintenanceHistoryScreen';
 import { defaultPeriod, formatDateInput, isoDateToInput } from '@/lib/invoice-selection';
 import { exportInvoicePdf } from '@/services/pdf-export';
+import { exportStoredInvoicePdf } from '@/services/pdf-export';
 import { listRecords } from '@/services/maintenance';
+import { listInvoices } from '@/services/invoices';
+import { buildInvoiceSnapshot } from '@/lib/invoice-snapshot';
 import type { MaintenanceRecord, Scooter } from '@/types';
 
 const mockNavigation = { navigate: jest.fn(), goBack: jest.fn() };
@@ -75,6 +78,11 @@ jest.mock('@/services/maintenance', () => ({
 jest.mock('@/services/pdf-export', () => ({
   exportInvoicePdf: jest.fn().mockResolvedValue(undefined),
   exportMaintenancePdf: jest.fn().mockResolvedValue(undefined),
+  exportStoredInvoicePdf: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@/services/invoices', () => ({
+  listInvoices: jest.fn(),
 }));
 
 function record(id: string, name: string, doneAt: Date): MaintenanceRecord {
@@ -120,6 +128,7 @@ configure({ asyncUtilTimeout: 10_000 });
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(listRecords).mockResolvedValue(records);
+  jest.mocked(listInvoices).mockResolvedValue([]);
 });
 
 describe('Factuurkeuze', () => {
@@ -178,5 +187,42 @@ describe('Factuurkeuze', () => {
 
     await waitFor(() => expect(screen.getByText('Geen beurten in deze selectie.')).toBeTruthy());
     expect(exportInvoicePdf).not.toHaveBeenCalled();
+  });
+
+  it('toont eerdere facturen en deelt ze opnieuw uit het opgeslagen snapshot', async () => {
+    const snapshot = buildInvoiceSnapshot({
+      scooter: { ...mockScooter, fuel_system: '2T' },
+      ownerName: 'Sam',
+      issuedAtIso: '2026-11-20T10:00:00.000Z',
+      selection: { kind: 'period', fromIso: '2026-11-01', toIso: '2026-11-26' },
+      lines: [
+        {
+          description: 'Oliewissel',
+          detail: null,
+          doneAtIso: '2026-11-02T09:00:00.000Z',
+          km: 12000,
+          amountCents: 1995,
+        },
+      ],
+    });
+    const entry = {
+      id: 'invoice-1',
+      user_id: 'user-1',
+      scooter_id: mockScooter.id,
+      sequence_year: 2026,
+      sequence_no: 1,
+      invoice_number: 'F50-2026-0001',
+      issued_at: snapshot.issuedAtIso,
+      selection: snapshot.selection,
+      snapshot,
+      created_at: snapshot.issuedAtIso,
+    };
+    jest.mocked(listInvoices).mockResolvedValue([entry]);
+
+    renderHistory();
+    await screen.findByText('F50-2026-0001');
+    fireEvent.press(screen.getByLabelText('Factuur F50-2026-0001 opnieuw delen'));
+
+    await waitFor(() => expect(exportStoredInvoicePdf).toHaveBeenCalledWith(entry));
   });
 });

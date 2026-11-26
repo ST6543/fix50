@@ -8,7 +8,6 @@
 import { Platform } from 'react-native';
 
 import {
-  buildInvoiceHtml,
   buildMaintenancePassHtml,
   buildTuningPassHtml,
   invoiceNumberFor,
@@ -18,6 +17,13 @@ import {
   type TuningPdfRun,
 } from '@/lib/pdf';
 import { selectRecordsForInvoice, type InvoiceSelection } from '@/lib/invoice-selection';
+import {
+  buildInvoiceHtmlFromSnapshot,
+  buildInvoiceSnapshot,
+  invoiceLinesFromRecords,
+  type InvoiceRegisterEntry,
+} from '@/lib/invoice-snapshot';
+import { registerInvoice } from '@/services/invoices';
 import { computeFuelStats } from '@/services/fuel';
 import { listFuelLogs } from '@/services/fuel';
 import {
@@ -222,6 +228,11 @@ export async function exportMaintenancePdf(scooter: Scooter): Promise<void> {
  * Factuur genereren (particulier) voor een gekozen periode of één losse
  * beurt, in dezelfde dossierstijl als het onderhoudsboekje. De periode op
  * het document volgt automatisch uit de geselecteerde regels.
+ *
+ * Eerst bouwen we het snapshot en laten we het register een nummer uitgeven;
+ * daarna wordt het document uit dat snapshot gerenderd. Lukt het register niet
+ * (bijv. offline), dan blijft de factuur werken met een lokaal nummer en een
+ * waarschuwing in de log — het snapshot gaat dan niet verloren.
  */
 export async function exportInvoicePdf(
   scooter: Scooter,
@@ -244,26 +255,41 @@ export async function exportInvoicePdf(
 
   const resolveName = nameResolver(items);
   const issuedAt = new Date().toISOString();
-  const number = invoiceNumberFor(scooter.id, issuedAt);
-
-  const html = buildInvoiceHtml({
-    scooter: {
-      ...scooterBlock(scooter),
-      fuel_system: scooter.fuel_system,
-    },
+  const snapshot = buildInvoiceSnapshot({
+    scooter: scooterBlock(scooter),
     ownerName: owner,
-    invoiceNumber: number,
     issuedAtIso: issuedAt,
-    lines: records.map((r) => ({
-      description: resolveName(r),
-      detail: r.parts,
-      doneAtIso: r.done_at,
-      km: r.km_at_service,
-      amountCents: r.cost_cents,
-    })),
+    selection,
+    lines: invoiceLinesFromRecords(records, resolveName),
   });
 
+  let number = invoiceNumberFor(scooter.id, issuedAt);
+  try {
+    const entry = await registerInvoice({
+      scooterId: scooter.id,
+      selection,
+      snapshot,
+      issuedAtIso: issuedAt,
+    });
+    number = entry.invoice_number;
+  } catch (err) {
+    console.warn(
+      '[pdf-export] Factuurregister niet bereikbaar — nummer lokaal bepaald:',
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  const html = buildInvoiceHtmlFromSnapshot(snapshot, number);
   await renderAndShare(html, sanitizeFileName(`FIX50-Factuur-${number}`));
+}
+
+/**
+ * Eerder uitgegeven factuur opnieuw delen: rendert exact het opgeslagen
+ * snapshot, zodat het document niet meeverandert met later onderhoud.
+ */
+export async function exportStoredInvoicePdf(entry: InvoiceRegisterEntry): Promise<void> {
+  const html = buildInvoiceHtmlFromSnapshot(entry.snapshot, entry.invoice_number);
+  await renderAndShare(html, sanitizeFileName(`FIX50-Factuur-${entry.invoice_number}`));
 }
 
 /**
