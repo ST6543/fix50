@@ -36,7 +36,7 @@ Secrets van Edge Functions staan al op het project; alleen bij nieuwe secrets ee
 npm run desktop:build
 ```
 
-Doet `expo export --platform web --output-dir desktop/www` en daarna `electron-builder --win portable` → output in **desktop-build/**:
+Doet `expo export --platform web --output-dir desktop/www` en daarna `electron-builder --win portable` → output in **desktop-build/**. De vorige build wordt eerst gearchiveerd als `desktop-build-v<N>`; na een geslaagde build blijven alleen de twee nieuwste buildmappen en `desktop-build.log` staan (al het andere wordt opgeruimd).
 
 - `desktop-build/FIX50.exe` — de portable single-file EXE die op GitHub gaat.
 - `desktop-build/win-unpacked/FIX50.exe` — de uitgepakte variant, nodig voor de testmodus in stap 6.

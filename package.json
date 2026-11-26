@@ -17,7 +17,7 @@
     "pdf:preview": "tsx scripts/pdf-preview.ts",
     "archil:check": "node --env-file-if-exists=.env scripts/archil-persist-check.mjs",
     "desktop:export": "expo export --platform web --output-dir desktop/www",
-    "desktop:build": "npm run desktop:export && electron-builder --win portable --config electron-builder.desktop.json"
+    "desktop:build": "node scripts/desktop-build.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
