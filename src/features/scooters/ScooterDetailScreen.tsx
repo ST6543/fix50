@@ -8,6 +8,8 @@ import type { AppNav } from '@/navigation/types';
 import { Button, Card, ErrorText, Input, SectionTitle } from '@/components/ui';
 import { useScooters } from '@/hooks/useScooters';
 import * as scootersService from '@/services/scooters';
+import { listRecords } from '@/services/maintenance';
+import { isBelowLastService, kmBehindMessage, lastServiceKmFromRecords } from '@/lib/km-history';
 import { kmUpdateSchema } from '@/lib/validation';
 import { formatDate, formatKm } from '@/lib/format';
 import { colors, spacing } from '@/theme';
@@ -32,6 +34,15 @@ export default function ScooterDetailScreen() {
     );
   }
 
+  async function saveKm(value: number) {
+    try {
+      await updateKm(value);
+      Alert.alert('Opgeslagen', 'Kilometerstand bijgewerkt. Onderhoudsintervallen zijn gecontroleerd.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Opslaan mislukt.');
+    }
+  }
+
   async function handleKmSave() {
     setError(null);
     const parsed = kmUpdateSchema.safeParse(Number(km));
@@ -39,12 +50,18 @@ export default function ScooterDetailScreen() {
       setError(parsed.error.issues[0]?.message ?? 'Ongeldige kilometerstand');
       return;
     }
-    try {
-      await updateKm(parsed.data);
-      Alert.alert('Opgeslagen', 'Kilometerstand bijgewerkt. Onderhoudsintervallen zijn gecontroleerd.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan mislukt.');
+    // Lager dan de vorige beurt? Dan rekent het plan vanaf een stand die je al voorbij bent.
+    const lastKm = await listRecords(scooter!.id, 20)
+      .then(lastServiceKmFromRecords)
+      .catch(() => null);
+    if (isBelowLastService(parsed.data, lastKm)) {
+      Alert.alert('Lager dan je vorige beurt', kmBehindMessage(parsed.data, lastKm!), [
+        { text: 'Aanpassen', style: 'cancel' },
+        { text: 'Toch opslaan', onPress: () => void saveKm(parsed.data) },
+      ]);
+      return;
     }
+    await saveKm(parsed.data);
   }
 
   async function handleDelete() {
@@ -96,7 +113,8 @@ export default function ScooterDetailScreen() {
           {error ? <ErrorText>{error}</ErrorText> : null}
           <Button label="Opslaan" onPress={handleKmSave} />
           <Text style={styles.hint}>
-            Bij een hogere stand controleert FIX50 automatisch je onderhoudsintervallen.
+            Bij een hogere stand controleert FIX50 automatisch je onderhoudsintervallen. Ligt je
+            invoer onder je laatste beurt, dan vragen we eerst om een bevestiging.
           </Text>
         </Card>
 

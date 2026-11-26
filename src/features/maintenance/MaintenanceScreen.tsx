@@ -1,6 +1,6 @@
 /** Onderhoud — één plan per scooter: wat komt eraan, over hoeveel km, en wat is te laat. */
 import React, { useCallback, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
@@ -18,8 +18,9 @@ import {
   summarizePlan,
 } from '@/lib/maintenance-plan';
 import { dismissReminder } from '@/services/maintenance';
+import { highestDoneKm, isBelowLastService } from '@/lib/km-history';
 import { formatKm } from '@/lib/format';
-import { colors, fonts, spacing, typography } from '@/theme';
+import { colors, fonts, radii, spacing, typography } from '@/theme';
 
 type Nav = AppNav;
 
@@ -58,6 +59,9 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
   );
   const groups = useMemo(() => groupPlan(plan), [plan]);
   const summary = useMemo(() => summarizePlan(plan), [plan]);
+  /** Laatste beurt met een stand: een lagere km maakt het plan onbetrouwbaar. */
+  const lastDoneKm = useMemo(() => highestDoneKm(schedules), [schedules]);
+  const kmBehind = isBelowLastService(km, lastDoneKm);
   const laterCount = groups.find((group) => group.key === 'gepland')?.entries.length ?? 0;
   const planningFromNow = plan.filter((entry) => entry.basis === 'vanaf nu').length;
   const visibleGroups = showAll ? groups : groups.filter((group) => group.key !== 'gepland');
@@ -124,10 +128,22 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
               <Text style={styles.heroTitle} numberOfLines={1}>
                 {activeScooter.name}
               </Text>
-              <Text style={styles.heroMeta}>
-                {fuelSystem} · {formatKm(km)}
-                {kmIsEstimated ? ' (geschat)' : ''}
-              </Text>
+              <View style={styles.heroMetaRow}>
+                <Text style={[styles.heroMeta, styles.heroMetaText]} numberOfLines={1}>
+                  {fuelSystem} · {formatKm(km)}
+                  {kmIsEstimated ? ' (geschat)' : ''}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Kilometerstand bijwerken"
+                  onPress={() =>
+                    navigation.navigate('EditScooter', { scooterId: activeScooter.id })
+                  }
+                  style={({ pressed }) => [styles.kmAction, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.kmActionLabel}>Bijwerken</Text>
+                </Pressable>
+              </View>
             </View>
             <Badge
               dot
@@ -137,6 +153,17 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
               tone={summary.overdue > 0 ? 'danger' : summary.soon > 0 ? 'warning' : 'success'}
             />
           </View>
+
+          {kmBehind && lastDoneKm !== null ? (
+            <View style={styles.kmWarn}>
+              <Text style={styles.kmWarnTitle}>Stand lager dan je vorige beurt</Text>
+              <Text style={styles.kmWarnBody}>
+                Je laatste beurt staat op {formatKm(lastDoneKm)}, deze stand is {formatKm(km)}.
+                Het plan rekent vanaf je beurt en lijkt daardoor te laat. Werk je kilometerstand
+                bij of controleer de invoer.
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.stats}>
             <View style={styles.stat}>
@@ -301,6 +328,43 @@ const styles = StyleSheet.create({
   heroMeta: {
     fontFamily: fonts.body,
     fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  heroMetaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s, marginTop: 2 },
+  heroMetaText: { flex: 1, marginTop: 0 },
+  kmAction: {
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    backgroundColor: colors.primarySubtle,
+    paddingHorizontal: spacing.m + 2,
+    paddingVertical: 5,
+  },
+  kmActionLabel: {
+    color: colors.primary,
+    fontFamily: fonts.display,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  kmWarn: {
+    marginTop: spacing.m,
+    padding: spacing.m,
+    borderRadius: radii.m,
+    borderWidth: 1,
+    borderColor: 'rgba(250,204,21,0.22)',
+    backgroundColor: 'rgba(250,204,21,0.06)',
+  },
+  kmWarnTitle: {
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.warning,
+  },
+  kmWarnBody: {
+    fontFamily: fonts.body,
+    fontSize: 12.5,
+    lineHeight: 18,
     color: colors.textMuted,
     marginTop: 2,
   },

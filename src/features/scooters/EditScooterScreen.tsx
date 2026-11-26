@@ -10,8 +10,10 @@ import { Button, Card, Chip, ChipRow, ErrorText, Input, SectionTitle } from '@/c
 import { CameraIcon, ImageIcon, MotoIcon, TrashIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import * as scootersService from '@/services/scooters';
+import { listRecords } from '@/services/maintenance';
 import { ENGINE_FAMILIES, FUEL_SYSTEMS, type EngineFamily } from '@/constants/branding';
-import { scooterSchema } from '@/lib/validation';
+import { isBelowLastService, kmBehindMessage, lastServiceKmFromRecords } from '@/lib/km-history';
+import { scooterSchema, type ScooterInput } from '@/lib/validation';
 import { dailyFromWeekly, weeklyFromDaily } from '@/lib/km-estimate';
 import { colors, fonts, spacing } from '@/theme';
 
@@ -172,13 +174,31 @@ export default function EditScooterScreen() {
       setError(parsed.error.issues[0]?.message ?? 'Ongeldige invoer');
       return;
     }
+    // Kilometerstand onder je laatste beurt? Eerst bevestigen — anders rekent het plan scheef.
+    if (editing) {
+      const lastKm = await listRecords(editing.id, 20)
+        .then(lastServiceKmFromRecords)
+        .catch(() => null);
+      if (isBelowLastService(parsed.data.current_km, lastKm)) {
+        Alert.alert('Lager dan je vorige beurt', kmBehindMessage(parsed.data.current_km, lastKm!), [
+          { text: 'Aanpassen', style: 'cancel' },
+          { text: 'Toch opslaan', onPress: () => void persist(parsed.data) },
+        ]);
+        return;
+      }
+    }
+    await persist(parsed.data);
+  }
+
+  /** Zonder extra controle wegschrijven; de km-check gebeurt vóór deze stap. */
+  async function persist(data: ScooterInput) {
     setBusy(true);
     try {
       let scooterId = editing?.id ?? null;
       if (editing) {
-        await scootersService.updateScooter(editing.id, parsed.data);
+        await scootersService.updateScooter(editing.id, data);
       } else {
-        const created = await scootersService.createScooter(parsed.data);
+        const created = await scootersService.createScooter(data);
         scooterId = created.id;
       }
       if (scooterId) {

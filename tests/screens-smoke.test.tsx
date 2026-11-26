@@ -262,6 +262,8 @@ describe('MaintenanceScreen', () => {
     expect(screen.getByText('Onderhoudsplan')).toBeTruthy();
     expect(screen.getByText('Aerox')).toBeTruthy();
     expect(screen.getByText('Actie nodig')).toBeTruthy();
+    // De plan-hero heeft dezelfde km-actie als Home.
+    expect(screen.getByLabelText('Kilometerstand bijwerken')).toBeTruthy();
     expect(screen.getAllByText('Bougie vervangen').length).toBeGreaterThan(0);
     expect(screen.getByText('Bougie is te laat')).toBeTruthy();
   });
