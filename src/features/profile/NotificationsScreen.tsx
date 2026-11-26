@@ -2,16 +2,23 @@
 import React, { useCallback, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { Badge, Button, EmptyState, Loading } from '@/components/ui';
 import { BellIcon } from '@/components/icons';
+import { useScooters } from '@/hooks/useScooters';
+import { useMaintenanceData } from '@/hooks/useAppData';
 import { enablePush, listNotifications, markRead } from '@/services/notifications';
+import { resolveMaintenanceTarget } from '@/lib/notification-links';
 import { timeAgo } from '@/lib/format';
-import { colors, spacing } from '@/theme';
+import { colors, fonts, spacing } from '@/theme';
+import type { AppNav } from '@/navigation/types';
 import type { AppNotification } from '@/types';
 
 export default function NotificationsScreen() {
+  const navigation = useNavigation<AppNav>();
+  const { activeScooter } = useScooters();
+  const { schedules, items: maintenanceItems, km } = useMaintenanceData();
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -27,6 +34,26 @@ export default function NotificationsScreen() {
   );
 
   const unread = items.filter((i) => !i.read_at).length;
+
+  /** Onderhoudsmelding → de taak die erbij hoort; andere meldingen blijven staan. */
+  function handleOpen(notification: AppNotification) {
+    if (!notification.read_at) {
+      markRead(notification.id).catch(() => undefined);
+      setItems((prev) =>
+        prev.map((x) =>
+          x.id === notification.id ? { ...x, read_at: new Date().toISOString() } : x,
+        ),
+      );
+    }
+    const target = resolveMaintenanceTarget({
+      notification,
+      schedules,
+      items: maintenanceItems,
+      currentKm: km,
+      fuelSystem: activeScooter?.fuel_system ?? null,
+    });
+    if (target) navigation.navigate('MaintenanceDetail', { scheduleId: target.scheduleId });
+  }
 
   if (loading) return <Loading label="Meldingen laden…" />;
 
@@ -66,28 +93,36 @@ export default function NotificationsScreen() {
             }}
           />
         }
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              if (!item.read_at) {
-                markRead(item.id).catch(() => undefined);
-                setItems((prev) => prev.map((x) => (x.id === item.id ? { ...x, read_at: new Date().toISOString() } : x)));
-              }
-            }}
-            style={[styles.card, !item.read_at && styles.unread]}
-          >
-            <View style={styles.cardRow}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Badge
-                label={item.type === 'warning' ? 'Waarschuwing' : item.type === 'maintenance' ? 'Onderhoud' : 'Info'}
-                tone={item.type === 'warning' ? 'danger' : item.type === 'maintenance' ? 'warning' : 'info'}
-              />
-            </View>
-            <Text style={styles.body}>{item.body}</Text>
-            <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const target = resolveMaintenanceTarget({
+            notification: item,
+            schedules,
+            items: maintenanceItems,
+            currentKm: km,
+            fuelSystem: activeScooter?.fuel_system ?? null,
+          });
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={target ? `${item.title} — open taak` : item.title}
+              onPress={() => handleOpen(item)}
+              style={[styles.card, !item.read_at && styles.unread]}
+            >
+              <View style={styles.cardRow}>
+                <Text style={styles.title}>{item.title}</Text>
+                <Badge
+                  label={item.type === 'warning' ? 'Waarschuwing' : item.type === 'maintenance' ? 'Onderhoud' : 'Info'}
+                  tone={item.type === 'warning' ? 'danger' : item.type === 'maintenance' ? 'warning' : 'info'}
+                />
+              </View>
+              <Text style={styles.body}>{item.body}</Text>
+              <View style={styles.cardFoot}>
+                <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
+                {target ? <Text style={styles.openHint}>Open taak ›</Text> : null}
+              </View>
+            </Pressable>
+          );
+        }}
       />
     </SafeAreaView>
   );
@@ -118,4 +153,17 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontWeight: '700', flexShrink: 1, marginRight: spacing.s },
   body: { color: colors.textMuted, marginTop: spacing.xs, lineHeight: 19 },
   time: { color: colors.textMuted, fontSize: 12.5, marginTop: spacing.xs },
+  cardFoot: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.s,
+  },
+  openHint: {
+    color: colors.primary,
+    fontFamily: fonts.display,
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: spacing.xs,
+  },
 });

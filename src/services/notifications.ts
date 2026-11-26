@@ -8,13 +8,22 @@
 import { Platform } from 'react-native';
 
 import { query } from './api';
+import { cacheGet, cacheSet } from './offline-cache';
 import { supabase } from '@/lib/supabase';
+import {
+  DEFAULT_REMINDER_KM,
+  localReminderCandidates,
+} from '@/lib/notification-links';
 import {
   insightToNotificationPayload,
   isoWeekKey,
   type Insight,
 } from '@/lib/insights';
-import type { AppNotification } from '@/types';
+import type {
+  AppNotification,
+  MaintenanceItem,
+  MaintenanceSchedule,
+} from '@/types';
 
 /** Dynamisch de notifications-module laden; null als dat niet kan. */
 async function loadNotifications(): Promise<typeof import('expo-notifications') | null> {
@@ -95,6 +104,95 @@ export async function enablePush(): Promise<boolean> {
   const ok = await requestPermission();
   if (!ok) return false;
   return registerPushToken();
+}
+
+/** Marge uit de gebruikersinstellingen; standaard 250 km als dat niet lukt. */
+async function reminderKmThreshold(): Promise<number> {
+  try {
+    const { data } = await supabase
+      .from('user_settings')
+      .select('reminder_km_before')
+      .maybeSingle();
+    const value = (data as { reminder_km_before?: number } | null)?.reminder_km_before;
+    return typeof value === 'number' && value >= 0 ? value : DEFAULT_REMINDER_KM;
+  } catch {
+    return DEFAULT_REMINDER_KM;
+  }
+}
+
+/**
+ * Lokale herinneringen op basis van de km-stand: taken die binnen de
+ * ingestelde marge of al over het interval zijn krijgen één melding per
+ * vervalstand. De sleutel staat in de offline-cache, dus niet bij elke focus
+ * opnieuw. Zonder permissie of native module gebeurt er niets (web).
+ */
+export async function syncLocalMaintenanceReminders(args: {
+  schedules: MaintenanceSchedule[];
+  items: MaintenanceItem[];
+  currentKm: number;
+  fuelSystem: string | null;
+  thresholdKm?: number;
+}): Promise<number> {
+  if (Platform.OS === 'web' || args.schedules.length === 0) return 0;
+  const Notifications = await loadNotifications();
+  if (!Notifications) return 0;
+
+  try {
+    const permissions = await Notifications.getPermissionsAsync();
+    if (!permissions.granted && permissions.status !== 'granted') return 0;
+
+    const thresholdKm = args.thresholdKm ?? (await reminderKmThreshold());
+    const candidates = localReminderCandidates({ ...args, thresholdKm });
+    let sent = 0;
+    for (const candidate of candidates) {
+      const cacheKey = `localrem:${candidate.key}`;
+      if (await cacheGet<boolean>(cacheKey)) continue;
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: candidate.title,
+          body: candidate.body,
+          // De tik op de melding opent precies deze taak.
+          data: { scheduleId: candidate.scheduleId },
+        },
+        trigger: null,
+      });
+      await cacheSet(cacheKey, true);
+      sent += 1;
+    }
+    return sent;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Luistert naar een tik op een (lokale) melding en geeft de schedule-id door.
+ * Ook een tik die de app vanaf koud start wordt meegenomen. Retourneert een
+ * opruimfunctie; zonder native module een no-op.
+ */
+export async function subscribeToMaintenanceOpens(
+  onOpen: (scheduleId: string) => void,
+): Promise<() => void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return () => undefined;
+
+  type NotificationResponse = import('expo-notifications').NotificationResponse;
+  const handle = (response: NotificationResponse | null) => {
+    const data = response?.notification?.request?.content?.data as
+      | { scheduleId?: unknown }
+      | undefined;
+    const scheduleId = typeof data?.scheduleId === 'string' ? data.scheduleId : null;
+    if (scheduleId) onOpen(scheduleId);
+  };
+
+  const subscription = Notifications.addNotificationResponseReceivedListener(handle);
+  try {
+    // App startte door een tik op een melding: meteen doorsturen.
+    handle(await Notifications.getLastNotificationResponseAsync());
+  } catch {
+    // Oudere SDK of geen antwoord beschikbaar — alleen de listener is genoeg.
+  }
+  return () => subscription.remove();
 }
 
 export async function listNotifications(limit = 50): Promise<AppNotification[]> {

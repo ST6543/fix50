@@ -1,5 +1,5 @@
 /** Onderhoud — één plan per scooter: wat komt eraan, over hoeveel km, en wat is te laat. */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -18,6 +18,7 @@ import {
   summarizePlan,
 } from '@/lib/maintenance-plan';
 import { dismissReminder } from '@/services/maintenance';
+import { syncLocalMaintenanceReminders } from '@/services/notifications';
 import { highestDoneKm, isBelowLastService } from '@/lib/km-history';
 import { formatKm } from '@/lib/format';
 import { colors, fonts, radii, spacing, typography } from '@/theme';
@@ -38,13 +39,26 @@ export default function MaintenanceScreen({ embedded = false }: { embedded?: boo
     refresh,
   } = useMaintenanceData();
   const [showAll, setShowAll] = useState(false);
+  /** Laatst gesynchroniseerde km-stand; voorkomt herhalen bij elke focus. */
+  const remSyncedRef = useRef<string | null>(null);
 
   const fuelSystem = activeScooter?.fuel_system ?? null;
 
   useFocusEffect(
     useCallback(() => {
       void refresh();
-    }, [refresh]),
+      // Lokale herinneringen volgen de km-stand: één keer per stand en planning.
+      if (!activeScooter || schedules.length === 0) return;
+      const syncKey = `${activeScooter.id}:${km}:${schedules.length}`;
+      if (remSyncedRef.current === syncKey) return;
+      remSyncedRef.current = syncKey;
+      void syncLocalMaintenanceReminders({
+        schedules,
+        items,
+        currentKm: km,
+        fuelSystem: activeScooter.fuel_system,
+      }).catch(() => undefined);
+    }, [refresh, activeScooter, schedules, items, km]),
   );
 
   const plan = useMemo(

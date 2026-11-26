@@ -219,6 +219,7 @@ jest.mock('@/services/ai-insights', () => ({
 
 jest.mock('@/services/notifications', () => ({
   notifyDeterioration: jest.fn().mockResolvedValue(undefined),
+  syncLocalMaintenanceReminders: jest.fn().mockResolvedValue(0),
 }));
 
 jest.mock('@/services/maintenance', () => {

@@ -1,12 +1,17 @@
 /** Navigatie: auth-stack voor ingelogde gebruikers, daarna 3 icon-only tabs. */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import { colors, fonts } from '@/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { subscribeToMaintenanceOpens } from '@/services/notifications';
 import {
   ChatIcon,
   HomeIcon,
@@ -51,6 +56,20 @@ import PrivacyScreen from '@/features/profile/PrivacyScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
+
+/** Root-referentie: een tik op een melding navigeert ook buiten een scherm. */
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+/** Tik die binnenkwam voordat de navigator klaar was (koude start). */
+const pendingNotification: { scheduleId: string | null } = { scheduleId: null };
+
+function openNotificationTarget(scheduleId: string) {
+  if (navigationRef.isReady()) {
+    navigationRef.navigate('MaintenanceDetail', { scheduleId });
+  } else {
+    pendingNotification.scheduleId = scheduleId;
+  }
+}
 
 const navTheme = {
   ...DefaultTheme,
@@ -130,13 +149,41 @@ function MainTabs() {
 
 export default function AppNavigator() {
   const { session, loading, profile } = useAuth();
+  const canRoute = Boolean(session && profile?.onboarded_at);
+
+  // Lokale herinneringen dragen de schedule-id mee; een tik opent die taak.
+  useEffect(() => {
+    if (!canRoute) return;
+    let alive = true;
+    let unsubscribe: (() => void) | undefined;
+    subscribeToMaintenanceOpens(openNotificationTarget)
+      .then((fn) => {
+        if (alive) unsubscribe = fn;
+        else fn();
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+      unsubscribe?.();
+    };
+  }, [canRoute]);
 
   if (loading) return null;
 
   const needsOnboarding = Boolean(session && profile && !profile.onboarded_at);
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navTheme}
+      onReady={() => {
+        const scheduleId = pendingNotification.scheduleId;
+        if (scheduleId) {
+          pendingNotification.scheduleId = null;
+          openNotificationTarget(scheduleId);
+        }
+      }}
+    >
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: colors.background },
