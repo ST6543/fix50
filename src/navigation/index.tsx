@@ -50,6 +50,7 @@ import PerformanceResultScreen from '@/features/performance/PerformanceResultScr
 import PerformanceHistoryScreen from '@/features/performance/PerformanceHistoryScreen';
 import ScooterDetailScreen from '@/features/scooters/ScooterDetailScreen';
 import EditScooterScreen from '@/features/scooters/EditScooterScreen';
+import TimelineScreen from '@/features/scooters/TimelineScreen';
 import ProfileScreen from '@/features/profile/ProfileScreen';
 import SettingsScreen from '@/features/profile/SettingsScreen';
 import NotificationsScreen from '@/features/profile/NotificationsScreen';
@@ -235,6 +236,7 @@ export default function AppNavigator() {
             <Stack.Screen name="PerformanceHistory" component={PerformanceHistoryScreen} options={{ title: 'Metingsgeschiedenis' }} />
             <Stack.Screen name="ScooterDetail" component={ScooterDetailScreen} options={{ title: 'Scooter' }} />
             <Stack.Screen name="EditScooter" component={EditScooterScreen} options={{ title: 'Scooter' }} />
+            <Stack.Screen name="Timeline" component={TimelineScreen} options={{ title: 'Tijdlijn' }} />
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Instellingen' }} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Meldingen' }} />
             <Stack.Screen name="Privacy" component={PrivacyScreen} options={{ title: 'Privacy' }} />

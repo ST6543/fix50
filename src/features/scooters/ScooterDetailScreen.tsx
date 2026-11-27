@@ -118,6 +118,12 @@ export default function ScooterDetailScreen() {
           </Text>
         </Card>
 
+        <Button
+          label="Tijdlijn bekijken"
+          variant="secondary"
+          onPress={() => navigation.navigate('Timeline', { scooterId: scooter.id })}
+        />
+
         <SectionTitle>Setup</SectionTitle>
         <Card>
           {setup ? (

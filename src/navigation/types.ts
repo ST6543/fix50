@@ -31,6 +31,8 @@ export type RootStackParamList = {
   PerformanceResult: { runId: string; linkIssue?: 'niet-gevonden' | 'opslaan-mislukt' };
   PerformanceHistory: undefined;
   ScooterDetail: { scooterId: string };
+  /** Chronologische lijn van één scooter; zonder id de actieve scooter. */
+  Timeline: { scooterId?: string } | undefined;
   EditScooter: { scooterId?: string } | undefined;
   Settings: undefined;
   Notifications: undefined;
