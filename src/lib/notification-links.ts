@@ -16,7 +16,13 @@ import type { AppNotification, MaintenanceItem, MaintenanceSchedule } from '@/ty
 /** Standaard marge (km) waarbinnen we vooraf waarschuwen. */
 export const DEFAULT_REMINDER_KM = 250;
 
-export type NotificationTarget = { screen: 'MaintenanceDetail'; scheduleId: string } | null;
+/** Schermen waar een melding naartoe kan wijzen. */
+export type NotificationTarget =
+  | { screen: 'MaintenanceDetail'; scheduleId: string }
+  | { screen: 'Garage'; segment: 'tankbeurten' }
+  | { screen: 'PerformanceHistory' }
+  | { screen: 'ChatHistory' }
+  | null;
 
 /**
  * Welke onderhoudstaak hoort bij deze melding?
@@ -48,6 +54,38 @@ export function resolveMaintenanceTarget(args: {
 
   const overdue = plan.find((entry) => entry.status === 'te laat');
   return { screen: 'MaintenanceDetail', scheduleId: (overdue ?? plan[0]!).schedule.id };
+}
+
+/**
+ * Waar landt een tik op deze melding?
+ *
+ * Onderhoud wijst de taak aan (zie `resolveMaintenanceTarget`). De overige
+ * signalen hebben geen taak-id in de melding, maar wél een logische plek:
+ * verbruik → tankboek, prestatie → metingen, diagnose → gesprekken. Zo doet
+ * een tik nooit niets, ook niet als er (nog) geen onderhoudsplan is.
+ */
+export function resolveNotificationTarget(args: {
+  notification: Pick<AppNotification, 'type' | 'title' | 'body'>;
+  schedules: MaintenanceSchedule[];
+  items: MaintenanceItem[];
+  currentKm: number;
+  fuelSystem: string | null;
+  today?: Date;
+}): NotificationTarget {
+  const maintenance = resolveMaintenanceTarget(args);
+  if (maintenance) return maintenance;
+
+  switch (args.notification.type) {
+    case 'warning':
+      return { screen: 'Garage', segment: 'tankbeurten' };
+    case 'performance':
+      return { screen: 'PerformanceHistory' };
+    case 'diagnosis':
+      return { screen: 'ChatHistory' };
+    default:
+      // 'maintenance' zonder plan en 'general' hebben geen logische bestemming.
+      return null;
+  }
 }
 
 export interface LocalReminderCandidate {

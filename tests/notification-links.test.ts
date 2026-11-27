@@ -6,6 +6,7 @@ import {
   DEFAULT_REMINDER_KM,
   localReminderCandidates,
   resolveMaintenanceTarget,
+  resolveNotificationTarget,
 } from '@/lib/notification-links';
 import type { MaintenanceItem, MaintenanceSchedule } from '@/types';
 
@@ -124,6 +125,71 @@ describe('resolveMaintenanceTarget', () => {
         notification: { type: 'maintenance', title: 'Onderhoud te laat', body: '' },
       }),
     ).toBeNull();
+  });
+});
+
+describe('resolveNotificationTarget', () => {
+  it('houdt onderhoud bij de taak', () => {
+    expect(
+      resolveNotificationTarget({
+        ...base,
+        notification: {
+          type: 'maintenance',
+          title: 'Oliewissel komt eraan',
+          body: 'Nog 100 km tot je volgende beurt.',
+        },
+      }),
+    ).toEqual({ screen: 'MaintenanceDetail', scheduleId: 's-olie' });
+  });
+
+  it('opent bij een verbruiksmelding het tankboek', () => {
+    expect(
+      resolveNotificationTarget({
+        ...base,
+        notification: { type: 'warning', title: 'Verbruik verslechterd', body: 'Je rijdt onzuiniger.' },
+      }),
+    ).toEqual({ screen: 'Garage', segment: 'tankbeurten' });
+  });
+
+  it('opent bij een prestatiemelding de metingen', () => {
+    expect(
+      resolveNotificationTarget({
+        ...base,
+        notification: {
+          type: 'performance',
+          title: 'Trager dan je beste meting',
+          body: 'Denk aan bandenspanning.',
+        },
+      }),
+    ).toEqual({ screen: 'PerformanceHistory' });
+  });
+
+  it('opent bij een diagnosemelding de gesprekken', () => {
+    expect(
+      resolveNotificationTarget({
+        ...base,
+        notification: { type: 'diagnosis', title: 'Nieuw advies', body: 'Lees het gesprek terug.' },
+      }),
+    ).toEqual({ screen: 'ChatHistory' });
+  });
+
+  it('laat een algemene melding zonder bestemming staan', () => {
+    expect(
+      resolveNotificationTarget({
+        ...base,
+        notification: { type: 'general', title: 'Welkom bij FIX50', body: 'Veel plezier.' },
+      }),
+    ).toBeNull();
+  });
+
+  it('geeft ook zonder onderhoudsplan een bestemming voor signalen', () => {
+    expect(
+      resolveNotificationTarget({
+        ...base,
+        schedules: [],
+        notification: { type: 'warning', title: 'Verbruik verslechterd', body: '' },
+      }),
+    ).toEqual({ screen: 'Garage', segment: 'tankbeurten' });
   });
 });
 

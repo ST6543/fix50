@@ -9,7 +9,7 @@ import { BellIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import { useMaintenanceData } from '@/hooks/useAppData';
 import { enablePush, listNotifications, markRead } from '@/services/notifications';
-import { resolveMaintenanceTarget } from '@/lib/notification-links';
+import { resolveNotificationTarget } from '@/lib/notification-links';
 import { timeAgo } from '@/lib/format';
 import { colors, fonts, spacing } from '@/theme';
 import type { AppNav } from '@/navigation/types';
@@ -42,7 +42,10 @@ export default function NotificationsScreen() {
 
   const unread = items.filter((i) => !i.read_at).length;
 
-  /** Onderhoudsmelding → de taak die erbij hoort; andere meldingen blijven staan. */
+  /**
+   * Onderhoud → de taak die erbij hoort, verbruik → tankboek, prestatie →
+   * metingen, diagnose → gesprekken. Alleen 'algemeen' heeft geen bestemming.
+   */
   function handleOpen(notification: AppNotification) {
     if (!notification.read_at) {
       markRead(notification.id).catch(() => undefined);
@@ -52,14 +55,28 @@ export default function NotificationsScreen() {
         ),
       );
     }
-    const target = resolveMaintenanceTarget({
+    const target = resolveNotificationTarget({
       notification,
       schedules,
       items: maintenanceItems,
       currentKm: km,
       fuelSystem: activeScooter?.fuel_system ?? null,
     });
-    if (target) navigation.navigate('MaintenanceDetail', { scheduleId: target.scheduleId });
+    if (!target) return;
+    switch (target.screen) {
+      case 'MaintenanceDetail':
+        navigation.navigate('MaintenanceDetail', { scheduleId: target.scheduleId });
+        break;
+      case 'Garage':
+        navigation.navigate('Main', { screen: 'Garage', params: { segment: target.segment } });
+        break;
+      case 'PerformanceHistory':
+        navigation.navigate('PerformanceHistory');
+        break;
+      case 'ChatHistory':
+        navigation.navigate('ChatHistory');
+        break;
+    }
   }
 
   if (loading) return <Loading label="Meldingen laden…" />;
@@ -116,7 +133,7 @@ export default function NotificationsScreen() {
           />
         }
         renderItem={({ item }) => {
-          const target = resolveMaintenanceTarget({
+          const target = resolveNotificationTarget({
             notification: item,
             schedules,
             items: maintenanceItems,
@@ -126,7 +143,7 @@ export default function NotificationsScreen() {
           return (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={target ? `${item.title} — open taak` : item.title}
+              accessibilityLabel={target ? `${item.title} — openen` : item.title}
               onPress={() => handleOpen(item)}
               style={[styles.card, !item.read_at && styles.unread]}
             >
@@ -140,7 +157,11 @@ export default function NotificationsScreen() {
               <Text style={styles.body}>{item.body}</Text>
               <View style={styles.cardFoot}>
                 <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
-                {target ? <Text style={styles.openHint}>Open taak ›</Text> : null}
+                {target ? (
+                  <Text style={styles.openHint}>
+                    {target.screen === 'MaintenanceDetail' ? 'Open taak ›' : 'Openen ›'}
+                  </Text>
+                ) : null}
               </View>
             </Pressable>
           );

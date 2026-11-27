@@ -1,5 +1,6 @@
 /** Centrale navigatietypes — geen circulaire imports tussen schermen en de navigator. */
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps, NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 export type RootStackParamList = {
@@ -7,7 +8,8 @@ export type RootStackParamList = {
   Register: undefined;
   ForgotPassword: undefined;
   Onboarding: undefined;
-  Main: undefined;
+  /** Met `{ screen, params }` open je een tabblad, bijv. de Garage op tankbeurten. */
+  Main: NavigatorScreenParams<MainTabParamList> | undefined;
   Account: undefined;
   Scooters: undefined;
   ChatDetail: { sessionId?: string; seedMessage?: string } | undefined;

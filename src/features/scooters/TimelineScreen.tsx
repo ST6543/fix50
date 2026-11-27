@@ -2,7 +2,13 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
+import type { AppNav } from '@/navigation/types';
 
 import {
   Card,
@@ -36,6 +42,7 @@ import {
   type TimelineEvent,
   type TimelineKind,
 } from '@/lib/timeline';
+import { resolveTimelineTarget } from '@/lib/timeline-links';
 import { formatDate } from '@/lib/format';
 import { colors, fonts, layout, radii, spacing, typography } from '@/theme';
 
@@ -55,6 +62,7 @@ const KIND_LABEL: Record<TimelineKind, string> = TIMELINE_KINDS.reduce(
 );
 
 export default function TimelineScreen() {
+  const navigation = useNavigation<AppNav>();
   const route = useRoute<RouteProp<RouteParams, 'Timeline'>>();
   const { scooters, activeScooter } = useScooters();
   const scooterId = route.params?.scooterId ?? activeScooter?.id ?? null;
@@ -116,6 +124,34 @@ export default function TimelineScreen() {
   const counts = useMemo(() => timelineCounts(events), [events]);
   const visible = useMemo(() => filterTimeline(events, filter), [events, filter]);
 
+  /** Elke rij opent het scherm waar de gebeurtenis thuishoort. */
+  function openEvent(event: TimelineEvent) {
+    const target = resolveTimelineTarget(event);
+    switch (target.screen) {
+      case 'MaintenanceHistory':
+        navigation.navigate('MaintenanceHistory');
+        break;
+      case 'Garage':
+        navigation.navigate('Main', { screen: 'Garage', params: { segment: target.segment } });
+        break;
+      case 'TuningHistory':
+        navigation.navigate('TuningHistory');
+        break;
+      case 'PerformanceHistory':
+        navigation.navigate('PerformanceHistory');
+        break;
+      case 'PerformanceResult':
+        navigation.navigate('PerformanceResult', { runId: target.runId });
+        break;
+      case 'ChatHistory':
+        navigation.navigate('ChatHistory');
+        break;
+      case 'ChatDetail':
+        navigation.navigate('ChatDetail', { sessionId: target.sessionId });
+        break;
+    }
+  }
+
   if (loading) return <Loading label="Tijdlijn laden…" />;
 
   if (failed) {
@@ -172,14 +208,26 @@ export default function TimelineScreen() {
           />
         }
         renderItem={({ item, index }) => (
-          <TimelineRow event={item} last={index === visible.length - 1} />
+          <TimelineRow
+            event={item}
+            last={index === visible.length - 1}
+            onPress={() => openEvent(item)}
+          />
         )}
       />
     </SafeAreaView>
   );
 }
 
-function TimelineRow({ event, last }: { event: TimelineEvent; last: boolean }) {
+function TimelineRow({
+  event,
+  last,
+  onPress,
+}: {
+  event: TimelineEvent;
+  last: boolean;
+  onPress: () => void;
+}) {
   const look = KIND_LOOK[event.kind];
   return (
     <View style={styles.row}>
@@ -194,7 +242,7 @@ function TimelineRow({ event, last }: { event: TimelineEvent; last: boolean }) {
           <Text style={styles.kind}>{KIND_LABEL[event.kind]}</Text>
           <Text style={styles.date}>{formatDate(event.at)}</Text>
         </View>
-        <Card style={styles.card}>
+        <Card style={styles.card} onPress={onPress}>
           <Text style={styles.eventTitle}>{event.title}</Text>
           {event.detail ? <Text style={styles.detail}>{event.detail}</Text> : null}
           {event.meta.length > 0 ? (
