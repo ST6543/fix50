@@ -44,6 +44,8 @@ export default function FuelScreen() {
   const [station, setStation] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Offline bewaard: eerlijk melden in plaats van als mislukt te tellen. */
+  const [queuedNote, setQueuedNote] = useState<string | null>(null);
 
   // ── Teller-scan (fase D): foto van de km-stand → prefill ──────────────
   const [kmScanBusy, setKmScanBusy] = useState(false);
@@ -174,7 +176,7 @@ export default function FuelScreen() {
     }
     setBusy(true);
     try {
-      await addFuelLog({
+      const result = await addFuelLog({
         scooterId: scooter.id,
         odometerKm: parsed.data.odometer_km,
         liters: parsed.data.liters,
@@ -185,7 +187,15 @@ export default function FuelScreen() {
       setPrice('');
       setStation('');
       setFormOpen(false);
-      reload();
+      setError(null);
+      if (result === 'queued') {
+        setQueuedNote(
+          'Tankbeurt lokaal bewaard — nog niet verzonden. Zodra je online bent gaat hij automatisch naar de server.',
+        );
+      } else {
+        setQueuedNote(null);
+        reload();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Opslaan mislukt.');
     } finally {
@@ -227,6 +237,7 @@ export default function FuelScreen() {
       keyboardShouldPersistTaps="handled"
       ListHeaderComponent={
         <View>
+          {queuedNote ? <Text style={styles.queuedNote}>{queuedNote}</Text> : null}
           {/* Statistiek */}
           <Card style={styles.statsCard}>
             <View style={styles.statsRow}>
@@ -413,6 +424,13 @@ export default function FuelScreen() {
 
 const styles = StyleSheet.create({
   errorScreen: { flex: 1, backgroundColor: colors.background },
+  queuedNote: {
+    color: colors.warning,
+    fontFamily: fonts.body,
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginBottom: spacing.s,
+  },
   list: { padding: spacing.l, paddingBottom: spacing.xxl },
   statsCard: { gap: spacing.m },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },

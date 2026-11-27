@@ -10,11 +10,27 @@ export class AppError extends Error {
 
 const NETWORK_HINTS = ['fetch failed', 'network request failed', 'internet', 'offline', 'load failed'];
 
+/** Vaste melding bij een netwerkstoring (ook gebruikt om die te herkennen). */
+export const OFFLINE_MESSAGE =
+  'Er is momenteel geen internetverbinding. Je gegevens worden lokaal bewaard en later gesynchroniseerd.';
+
+/**
+ * Is dit een netwerkstoring (en dus geen echte fout)? Dan mag een schrijfactie
+ * in de wachtrij in plaats van als mislukt te gelden.
+ */
+export function isOfflineError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes(OFFLINE_MESSAGE.toLowerCase()) ||
+    NETWORK_HINTS.some((hint) => msg.includes(hint))
+  );
+}
+
 export function friendlyError(err: unknown): string {
   if (err instanceof AppError) return err.message;
   const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
   if (NETWORK_HINTS.some((h) => msg.includes(h))) {
-    return 'Er is momenteel geen internetverbinding. Je gegevens worden lokaal bewaard en later gesynchroniseerd.';
+    return OFFLINE_MESSAGE;
   }
   if (msg.includes('jose')) return 'Je sessie is verlopen. Log opnieuw in.';
   if (msg.includes('duplicate key')) return 'Dit bestaat al in je lijst.';

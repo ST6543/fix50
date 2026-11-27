@@ -287,7 +287,7 @@ export default function PerformanceRunScreen() {
 
     setPhase('saving');
     try {
-      const saved = await perfService.saveRun({
+      const result = await perfService.saveRun({
         scooterId: activeScooter?.id ?? null,
         setupId,
         run: {
@@ -305,6 +305,20 @@ export default function PerformanceRunScreen() {
           started_at: new Date(Date.now() - metrics.durationS * 1000).toISOString(),
         },
       });
+      // Offline: de meting staat lokaal klaar. Het resultaatscherm leest van de
+      // server, dus sturen we de gebruiker naar de geschiedenis met een eerlijke
+      // melding in plaats van "opslaan mislukt".
+      if (result.queued) {
+        watchRef.current?.remove();
+        Alert.alert(
+          'Meting lokaal bewaard',
+          'Je bent offline. De meting is op dit toestel bewaard en wordt verzonden zodra je weer online bent.',
+          [{ text: 'OK', onPress: () => navigation.navigate('PerformanceHistory') }],
+        );
+        return;
+      }
+
+      const saved = result.run;
       // De key uit de navigatie is leidend. Staat de wissel niet meer in het
       // log, dan proberen we hem alsnog te koppelen; de service zegt hoeveel
       // regels echt gekoppeld zijn, zodat niets stil ongekoppeld blijft.

@@ -2,6 +2,7 @@
 import { randomUUID } from 'expo-crypto';
 
 import { query } from './api';
+import { currentUserId, sendOrQueue, type SendResult } from './offline-queue';
 import { supabase } from '@/lib/supabase';
 import type { TuningChange, TuningSetup, UUID } from '@/types';
 import { JET_PART_LABELS } from '@/lib/jet-log';
@@ -161,15 +162,14 @@ export async function addChanges(args: {
   kmAtChange?: number | null;
   /** Hergebruik een bestaand groeps-id; standaard komt er een nieuwe. */
   groupId?: UUID | null;
-}): Promise<void> {
-  if (args.rows.length === 0) return;
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) throw new Error('Niet ingelogd');
+}): Promise<SendResult> {
+  if (args.rows.length === 0) return 'sent';
+  const userId = await currentUserId();
 
   const groupId = args.groupId ?? randomUUID();
   const changedAt = new Date().toISOString();
   const payload = args.rows.map((row) => ({
-    user_id: user.user!.id,
+    user_id: userId,
     scooter_id: args.scooterId,
     setup_id: args.setupId ?? null,
     group_id: groupId,
@@ -181,7 +181,10 @@ export async function addChanges(args: {
     km_at_change: args.kmAtChange ?? null,
     changed_at: changedAt,
   }));
-  await query<void>(() => supabase.from('tuning_changes').insert(payload));
+  // Alle regels van één wissel gaan als geheel de wachtrij in.
+  return sendOrQueue('tuning_changes', groupId, payload, () =>
+    query<void>(() => supabase.from('tuning_changes').insert(payload)),
+  );
 }
 
 export async function addChange(args: {
@@ -193,8 +196,8 @@ export async function addChange(args: {
   result?: string | null;
   notes?: string | null;
   kmAtChange?: number | null;
-}): Promise<void> {
-  await addChanges({
+}): Promise<SendResult> {
+  return addChanges({
     scooterId: args.scooterId,
     setupId: args.setupId,
     kmAtChange: args.kmAtChange,

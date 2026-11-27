@@ -3,8 +3,13 @@
  * Conflict-beleid: last-write-wins per veld-groep met merge op setups;
  * server blijft source of truth bij gelijktijdige wijzigingen.
  *
- * Web: expo-sqlite (wasm) kan traag/hangend zijn in dev — daar gebruiken we
- * een simpele localStorage-fallback, zodat het laden nooit blokkeert.
+ * De wachtrij onthoudt schrijfacties die door een netwerkstoring niet naar de
+ * server konden. Ze blijven staan tot de flush slaagt — een rij die de server
+ * weigert telt als "nog niet verzonden" en blijft zichtbaar, nooit stil als
+ * mislukt of als verzonden.
+ *
+ * Web: expo-sqlite (wasm) kan traag/hangend zijn in dev — daar bewaren we de
+ * cache én de wachtrij in localStorage, zodat het laden nooit blokkeert.
  */
 import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
@@ -39,6 +44,58 @@ const webKv = {
   },
 };
 
+/** Tabellen die de wachtrij mag afspelen; de server valideert verder via RLS. */
+export const SYNC_QUEUE_TABLES = [
+  'scooters',
+  'scooter_setups',
+  'maintenance_records',
+  'fuel_logs',
+  'tuning_changes',
+  'performance_runs',
+] as const;
+
+export type SyncQueueTable = (typeof SYNC_QUEUE_TABLES)[number];
+
+export interface QueuedRow {
+  id: number;
+  table_name: string;
+  row_id: string;
+  payload: string;
+  created_at: number;
+}
+
+export interface SyncQueueSummary {
+  /** Aantal rijden dat nog niet naar de server is geschreven. */
+  pending: number;
+  /** Moment (ms) van de oudste wachtende rij; null als de wachtrij leeg is. */
+  oldestAt: number | null;
+}
+
+export interface SyncFlushResult {
+  /** Rijen die nu naar de server zijn geschreven en uit de wachtrij zijn. */
+  synced: number;
+  /** Rijen die bleven staan (netwerk of door de server geweigerd). */
+  failed: number;
+  /** Nog openstaand na deze poging. */
+  pending: number;
+}
+
+const WEB_QUEUE_KEY = 'sync_queue';
+
+// ── Meldingen: schermen horen meteen dat de wachtrij veranderde ──
+const listeners = new Set<() => void>();
+
+function notifyQueueChanged(): void {
+  for (const listener of listeners) listener();
+}
+
+/** Abonneer je op wijzigingen in de wachtrij; geeft een opruimfunctie. */
+export function subscribeSyncQueue(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+// ── Opslag ───────────────────────────────────────────────────
 let db: SQLite.SQLiteDatabase | null = null;
 
 async function getDb(): Promise<SQLite.SQLiteDatabase> {
@@ -61,6 +118,36 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
     `);
   }
   return db;
+}
+
+function webQueueRead(): QueuedRow[] {
+  const raw = webKv.get(WEB_QUEUE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as QueuedRow[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function webQueueWrite(rows: QueuedRow[]): void {
+  webKv.set(WEB_QUEUE_KEY, JSON.stringify(rows));
+}
+
+async function readQueue(): Promise<QueuedRow[]> {
+  if (isWeb) return webQueueRead();
+  const d = await getDb();
+  return d.getAllAsync<QueuedRow>('select * from sync_queue order by created_at asc');
+}
+
+async function removeQueuedRow(id: number): Promise<void> {
+  if (isWeb) {
+    webQueueWrite(webQueueRead().filter((row) => row.id !== id));
+    return;
+  }
+  const d = await getDb();
+  await d.runAsync('delete from sync_queue where id = ?', id);
 }
 
 export async function cacheSet(key: string, value: unknown): Promise<void> {
@@ -97,9 +184,24 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
   }
 }
 
-export async function queueSync(table: string, rowId: string, payload: unknown): Promise<void> {
+/**
+ * Zet een schrijfactie in de wachtrij. `rowId` is het id van de rij (of het
+ * groeps-id bij meerdere regels); `payload` is precies wat er verstuurd moet
+ * worden, dus een object of een array.
+ */
+export async function queueSync(
+  table: SyncQueueTable,
+  rowId: string,
+  payload: unknown,
+): Promise<void> {
+  const createdAt = Date.now();
   if (isWeb) {
-    // Web heeft (nog) geen offline-wachtrij; schrijfacties gaan direct naar de server.
+    const rows = webQueueRead();
+    webQueueWrite([
+      ...rows,
+      { id: createdAt + rows.length, table_name: table, row_id: rowId, payload: JSON.stringify(payload), created_at: createdAt },
+    ]);
+    notifyQueueChanged();
     return;
   }
   const d = await getDb();
@@ -108,43 +210,86 @@ export async function queueSync(table: string, rowId: string, payload: unknown):
     table,
     rowId,
     JSON.stringify(payload),
-    Date.now(),
+    createdAt,
   );
+  notifyQueueChanged();
 }
 
-/** Voert de sync-queue uit zodra er weer internet is. */
-export async function flushSyncQueue(): Promise<{ synced: number; failed: number }> {
-  const d = await getDb();
-  const rows = await d.getAllAsync<{
-    id: number;
-    table_name: string;
-    row_id: string;
-    payload: string;
-  }>('select * from sync_queue order by created_at asc');
+/** Hoeveel schrijfacties wachten nog, en sinds wanneer. */
+export async function syncQueueSummary(): Promise<SyncQueueSummary> {
+  const rows = await readQueue();
+  return {
+    pending: rows.length,
+    oldestAt: rows.length > 0 ? (rows[0]?.created_at ?? null) : null,
+  };
+}
+
+export async function pendingSyncCount(): Promise<number> {
+  return (await syncQueueSummary()).pending;
+}
+
+/**
+ * Schrijft één wachtrij-rij naar de server. Supabase meldt fouten via `error`
+ * in plaats van te gooien; die controleren we hier expliciet, zodat een
+ * geweigerde rij niet als verzonden telt.
+ */
+async function sendQueuedRow(row: QueuedRow, payload: unknown): Promise<void> {
+  const assertNoError = (error: { message: string } | null) => {
+    if (error) throw new Error(error.message);
+  };
+
+  switch (row.table_name) {
+    case 'scooters': {
+      const { error } = await supabase
+        .from('scooters')
+        .update(payload as Record<string, unknown>)
+        .eq('id', row.row_id);
+      assertNoError(error);
+      return;
+    }
+    case 'scooter_setups': {
+      const { error } = await supabase
+        .from('scooter_setups')
+        .upsert({ id: row.row_id, ...(payload as Record<string, unknown>) });
+      assertNoError(error);
+      return;
+    }
+    case 'maintenance_records':
+    case 'fuel_logs':
+    case 'tuning_changes':
+    case 'performance_runs': {
+      const { error } = await supabase.from(row.table_name).insert(payload as never);
+      assertNoError(error);
+      return;
+    }
+    default:
+      throw new Error(`Onbekende tabel in de wachtrij: ${row.table_name}`);
+  }
+}
+
+/**
+ * Voert de sync-queue uit zodra er weer internet is. Rijen die niet lukken
+ * blijven staan en worden als `pending` teruggegeven — nooit stil weggegooid.
+ */
+export async function flushSyncQueue(): Promise<SyncFlushResult> {
+  const rows = await readQueue();
   let synced = 0;
   let failed = 0;
 
   for (const row of rows) {
     try {
-      const payload = JSON.parse(row.payload) as Record<string, unknown>;
-      // Slechts enkele whitelisted tabellen; server valideert verder via RLS.
-      if (row.table_name === 'scooters') {
-        await supabase.from('scooters').update(payload).eq('id', row.row_id);
-      } else if (row.table_name === 'scooter_setups') {
-        await supabase.from('scooter_setups').upsert({ id: row.row_id, ...payload });
-      } else if (row.table_name === 'maintenance_records') {
-        await supabase.from('maintenance_records').insert(payload);
-      } else {
-        failed++;
-        continue;
-      }
-      await d.runAsync('delete from sync_queue where id = ?', row.id);
-      synced++;
+      const payload = JSON.parse(row.payload) as unknown;
+      await sendQueuedRow(row, payload);
+      await removeQueuedRow(row.id);
+      synced += 1;
     } catch {
-      failed++;
+      failed += 1;
     }
   }
-  return { synced, failed };
+
+  const pending = await pendingSyncCount();
+  if (synced > 0) notifyQueueChanged();
+  return { synced, failed, pending };
 }
 
 /** Verwijdert de lokale cache (o.a. bij accountverwijdering of uitloggen). */
@@ -160,8 +305,10 @@ export async function clearCache(): Promise<void> {
     } catch {
       // negeren
     }
+    notifyQueueChanged();
     return;
   }
   const d = await getDb();
   await d.execAsync('delete from cache_kv; delete from sync_queue;');
+  notifyQueueChanged();
 }

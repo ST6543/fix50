@@ -7,6 +7,7 @@ import type { AppNav, TabNav } from '@/navigation/types';
 
 import { Badge, Card, Eyebrow, IconTile, SectionTitle, SkeletonScreen } from '@/components/ui';
 import { SpeedChart } from '@/components/charts';
+import SyncBanner from '@/components/SyncBanner';
 import { FadeInView } from '@/components/motion';
 import { notifyDeterioration } from '@/services/notifications';
 import { ChevronRightIcon, GaugeIcon, MotoIcon, WarningIcon } from '@/components/icons';
@@ -174,6 +175,9 @@ export default function HomeScreen() {
             <Text style={styles.avatarText}>{initial}</Text>
           </Pressable>
         </View>
+
+        {/* Nog niet verzonden wijzigingen — nooit stil verbergen. */}
+        <SyncBanner />
 
         {/* Scooter-hero met kilometerstand en de eerstvolgende actie */}
         {activeScooter ? (

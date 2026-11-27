@@ -6,7 +6,10 @@
  * (o.a. voor het PDF-boekje). De allereerste beurt heeft geen beginstand en
  * levert dus geen verbruik op.
  */
+import { randomUUID } from 'expo-crypto';
+
 import { query } from './api';
+import { currentUserId, sendOrQueue, type SendResult } from './offline-queue';
 import { supabase } from '@/lib/supabase';
 import type { FuelLog, UUID } from '@/types';
 
@@ -31,22 +34,22 @@ export async function addFuelLog(args: {
   totalCents?: number | null;
   station?: string | null;
   notes?: string | null;
-}): Promise<void> {
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) throw new Error('Niet ingelogd');
-
-  await query<void>(() =>
-    supabase.from('fuel_logs').insert({
-      user_id: user.user!.id,
-      scooter_id: args.scooterId,
-      odometer_km: args.odometerKm,
-      liters: args.liters,
-      filled_at: args.filledAt ?? new Date().toISOString(),
-      price_per_liter_cents: args.pricePerLiterCents ?? null,
-      total_cents: args.totalCents ?? null,
-      station: args.station ?? null,
-      notes: args.notes ?? null,
-    }),
+}): Promise<SendResult> {
+  const payload = {
+    id: randomUUID(),
+    user_id: await currentUserId(),
+    scooter_id: args.scooterId,
+    odometer_km: args.odometerKm,
+    liters: args.liters,
+    filled_at: args.filledAt ?? new Date().toISOString(),
+    price_per_liter_cents: args.pricePerLiterCents ?? null,
+    total_cents: args.totalCents ?? null,
+    station: args.station ?? null,
+    notes: args.notes ?? null,
+  };
+  // Offline belandt de beurt in de wachtrij; het scherm meldt dat eerlijk.
+  return sendOrQueue('fuel_logs', payload.id, payload, () =>
+    query<void>(() => supabase.from('fuel_logs').insert(payload)),
   );
 }
 
