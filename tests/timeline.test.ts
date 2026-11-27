@@ -228,15 +228,25 @@ describe('buildScooterTimeline', () => {
 
   it('neemt alleen diagnosegesprekken van deze scooter mee', () => {
     const events = buildScooterTimeline({
+      scooterId: 'scooter-1',
       sessions: [
         session(),
         session({ id: 'session-2', scooter_id: 'scooter-2', title: 'Andere scooter' }),
+        session({ id: 'session-3', scooter_id: null, title: 'Los gesprek' }),
       ],
     });
 
-    // De filter op scooter gebeurt bij het laden; de bouwer toont wat hij krijgt.
+    expect(events).toHaveLength(1);
+    expect(events[0]!.id).toBe('diagnose:session-1');
+    expect(events[0]!.title).toBe('Scooter valt weg bij volgas');
+  });
+
+  it('houdt zonder scooter-id alle gesprekken die het krijgt', () => {
+    const events = buildScooterTimeline({
+      sessions: [session(), session({ id: 'session-2', scooter_id: 'scooter-2' })],
+    });
+
     expect(events).toHaveLength(2);
-    expect(events.map((e) => e.title)).toContain('Scooter valt weg bij volgas');
   });
 
   it('slaat gebeurtenissen met een ongeldige datum over', () => {

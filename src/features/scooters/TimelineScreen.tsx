@@ -70,14 +70,22 @@ export default function TimelineScreen() {
         listFuelLogs(scooterId, 200).catch(() => []),
         listChanges(scooterId, 200).catch(() => []),
         listRuns(200, scooterId).catch(() => []),
-        // Gesprekken zijn niet per scooter op te halen; filter ze hier.
-        listSessions()
-          .then((sessions) => sessions.filter((s) => s.scooter_id === scooterId))
-          .catch(() => []),
+        // Gesprekken zijn niet per scooter op te halen; de bouwer filtert ze.
+        listSessions().catch(() => []),
       ])
         .then(([records, items, fuelLogs, changes, runs, sessions]) => {
           if (!alive) return;
-          setEvents(buildScooterTimeline({ records, items, fuelLogs, changes, runs, sessions }));
+          setEvents(
+            buildScooterTimeline({
+              scooterId,
+              records,
+              items,
+              fuelLogs,
+              changes,
+              runs,
+              sessions,
+            }),
+          );
         })
         .finally(() => {
           if (alive) setLoading(false);

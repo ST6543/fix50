@@ -34,6 +34,8 @@ export interface TimelineEvent {
 }
 
 export interface TimelineInput {
+  /** Scooter waar de lijn bij hoort; diagnoses worden hierop gefilterd. */
+  scooterId?: string;
   records?: MaintenanceRecord[];
   items?: MaintenanceItem[];
   fuelLogs?: FuelLog[];
@@ -148,8 +150,12 @@ export function buildScooterTimeline(input: TimelineInput): TimelineEvent[] {
     });
   }
 
-  // Diagnose: alleen gesprekken die aan deze scooter hangen.
-  for (const session of input.sessions ?? []) {
+  // Diagnose: de gesprekken worden hier op de scooter gefilterd, niet door de
+  // aanroeper. Zonder scooter-id tonen we alles wat we krijgen (losse preview).
+  const sessions = (input.sessions ?? []).filter(
+    (session) => !input.scooterId || session.scooter_id === input.scooterId,
+  );
+  for (const session of sessions) {
     events.push({
       id: `diagnose:${session.id}`,
       kind: 'diagnose',
