@@ -135,12 +135,8 @@ export default function TimelineScreen() {
         ListEmptyComponent={
           <EmptyState
             icon={WrenchIcon}
-            title={events.length === 0 ? 'Nog geen geschiedenis' : 'Niets in deze filter'}
-            subtitle={
-              events.length === 0
-                ? 'Zodra je onderhoud registreert, tankt, tunet of meet, verschijnt het hier.'
-                : 'Kies een andere soort gebeurtenis om de rest van de lijn te zien.'
-            }
+            title="Nog geen geschiedenis"
+            subtitle="Zodra je onderhoud registreert, tankt, tunet of meet, verschijnt het hier."
           />
         }
         renderItem={({ item, index }) => (
