@@ -5,7 +5,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
-import { Badge, Card, EmptyState, Loading, PressableTile, SectionTitle, StatTile } from '@/components/ui';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  LoadError,
+  Loading,
+  PressableTile,
+  SectionTitle,
+  StatTile,
+} from '@/components/ui';
 import { ClipboardIcon, FlagIcon, GaugeIcon, MotoIcon, ScaleIcon, SlidersIcon } from '@/components/icons';
 import { MiniBarChart, TrendChart } from '@/components/charts';
 import { FadeInView } from '@/components/motion';
@@ -33,26 +42,49 @@ export default function TuningDashboardScreen() {
   const [setups, setSetups] = useState<TuningSetup[]>([]);
   const [runs, setRuns] = useState<PerformanceRun[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Een mislukte query is geen leeg dashboard — die laten we zien. */
+  const [failed, setFailed] = useState(false);
+
+  const load = useCallback(() => {
+    if (!activeScooter) {
+      setLoading(false);
+      return;
+    }
+    setFailed(false);
+    Promise.all([
+      tuningService.listSetups(activeScooter.id),
+      perfService.listRuns(100, activeScooter.id),
+    ])
+      .then(([s, r]) => {
+        setSetups(s);
+        setRuns(r);
+      })
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
+  }, [activeScooter]);
 
   useFocusEffect(
     useCallback(() => {
-      if (!activeScooter) {
-        setLoading(false);
-        return;
-      }
-      Promise.all([
-        tuningService.listSetups(activeScooter.id).catch(() => [] as TuningSetup[]),
-        perfService.listRuns(100, activeScooter.id).catch(() => [] as PerformanceRun[]),
-      ])
-        .then(([s, r]) => {
-          setSetups(s);
-          setRuns(r);
-        })
-        .finally(() => setLoading(false));
-    }, [activeScooter]),
+      load();
+    }, [load]),
   );
 
   if (loading) return <Loading label="Dashboard laden…" />;
+
+  if (failed) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LoadError
+          title="Tuningdashboard niet geladen"
+          subtitle="Je opstellingen en metingen konden niet worden opgehaald. Controleer je verbinding en probeer het opnieuw."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   if (!activeScooter) {
     return (

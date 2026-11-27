@@ -3,7 +3,17 @@ import React, { useCallback, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Badge, Button, Card, EmptyState, ErrorText, IconTile, Input, SkeletonScreen } from '@/components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ErrorText,
+  IconTile,
+  Input,
+  LoadError,
+  SkeletonScreen,
+} from '@/components/ui';
 import { CameraIcon, DropletIcon, ImageIcon, PlusIcon, SendIcon } from '@/components/icons';
 import * as ImagePicker from 'expo-image-picker';
 import { shrinkForScan } from '@/lib/image-shrink';
@@ -24,6 +34,8 @@ export default function FuelScreen() {
   const { activeScooter } = useScooters();
   const [logs, setLogs] = useState<FuelLog[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Een mislukte query is geen leeg tanklogboek — die laten we zien. */
+  const [failed, setFailed] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [odometer, setOdometer] = useState('');
@@ -92,8 +104,11 @@ export default function FuelScreen() {
       return;
     }
     listFuelLogs(activeScooter.id)
-      .then(setLogs)
-      .catch(() => setLogs([]))
+      .then((next) => {
+        setLogs(next);
+        setFailed(false);
+      })
+      .catch(() => setFailed(true))
       .finally(() => setLoading(false));
   }, [activeScooter]);
 
@@ -104,6 +119,21 @@ export default function FuelScreen() {
   );
 
   if (loading) return <SkeletonScreen />;
+
+  if (failed) {
+    return (
+      <View style={styles.errorScreen}>
+        <LoadError
+          title="Tankbeurten niet geladen"
+          subtitle="Je logboek kon niet worden opgehaald. Controleer je verbinding en probeer het opnieuw."
+          onRetry={() => {
+            setLoading(true);
+            reload();
+          }}
+        />
+      </View>
+    );
+  }
 
   if (!activeScooter) {
     return (
@@ -382,6 +412,7 @@ export default function FuelScreen() {
 }
 
 const styles = StyleSheet.create({
+  errorScreen: { flex: 1, backgroundColor: colors.background },
   list: { padding: spacing.l, paddingBottom: spacing.xxl },
   statsCard: { gap: spacing.m },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },

@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
-import { Badge, Card, EmptyState, Loading, SectionTitle } from '@/components/ui';
+import { Badge, Card, EmptyState, LoadError, Loading, SectionTitle } from '@/components/ui';
 import { ScaleIcon } from '@/components/icons';
 import { calculateCvt, cvtSpeedLabel, cvtStateFromSetupParts, SETUP_NUMERIC_KEYS } from '@/lib/afstel';
 import { applyCalibration, calibrateModel } from '@/lib/model-calibration';
@@ -25,28 +25,51 @@ export default function SetupComparisonScreen() {
   const [aId, setAId] = useState<string | null>(null);
   const [bId, setBId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  /** Een mislukte query is geen lege setup-lijst — die laten we zien. */
+  const [failed, setFailed] = useState(false);
+
+  const load = useCallback(() => {
+    if (!activeScooter) {
+      setLoading(false);
+      return;
+    }
+    setFailed(false);
+    Promise.all([
+      tuningService.listSetups(activeScooter.id),
+      perfService.listRuns(100, activeScooter.id),
+    ])
+      .then(([s, r]) => {
+        setSetups(s);
+        setRuns(r);
+        setAId(s[0]?.id ?? null);
+        setBId(s[1]?.id ?? null);
+      })
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
+  }, [activeScooter]);
 
   useFocusEffect(
     useCallback(() => {
-      if (!activeScooter) {
-        setLoading(false);
-        return;
-      }
-      Promise.all([
-        tuningService.listSetups(activeScooter.id).catch(() => [] as TuningSetup[]),
-        perfService.listRuns(100, activeScooter.id).catch(() => [] as PerformanceRun[]),
-      ])
-        .then(([s, r]) => {
-          setSetups(s);
-          setRuns(r);
-          setAId(s[0]?.id ?? null);
-          setBId(s[1]?.id ?? null);
-        })
-        .finally(() => setLoading(false));
-    }, [activeScooter]),
+      load();
+    }, [load]),
   );
 
   if (loading) return <Loading label="Setups laden…" />;
+
+  if (failed) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LoadError
+          title="Setups niet geladen"
+          subtitle="Je opstellingen en metingen konden niet worden opgehaald. Controleer je verbinding en probeer het opnieuw."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   const a = setups.find((s) => s.id === aId) ?? null;
   const b = setups.find((s) => s.id === bId) ?? null;

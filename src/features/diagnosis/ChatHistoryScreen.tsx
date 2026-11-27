@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
-import { Button, Card, EmptyState, Loading, SectionTitle } from '@/components/ui';
+import { Button, Card, EmptyState, LoadError, Loading, SectionTitle } from '@/components/ui';
 import { MiniBarChart } from '@/components/charts';
 import { FadeInView } from '@/components/motion';
 import { ChatIcon } from '@/components/icons';
@@ -20,15 +20,22 @@ export default function ChatHistoryScreen() {
   const navigation = useNavigation<Nav>();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Een mislukte query is geen lege geschiedenis — die laten we zien. */
+  const [failed, setFailed] = useState(false);
+
+  const load = useCallback(() => {
+    setFailed(false);
+    chatService
+      .listSessions()
+      .then(setSessions)
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      chatService
-        .listSessions()
-        .then(setSessions)
-        .catch(() => setSessions([]))
-        .finally(() => setLoading(false));
-    }, []),
+      load();
+    }, [load]),
   );
 
   function confirmDelete(id: string) {
@@ -46,6 +53,21 @@ export default function ChatHistoryScreen() {
   }
 
   if (loading) return <Loading label="Gesprekken laden…" />;
+
+  if (failed) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LoadError
+          title="Gesprekken niet geladen"
+          subtitle="Je diagnosegeschiedenis kon niet worden opgehaald. Controleer je verbinding en probeer het opnieuw."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

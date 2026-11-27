@@ -4,7 +4,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-import { Badge, Button, EmptyState, Loading } from '@/components/ui';
+import { Badge, Button, EmptyState, LoadError, Loading } from '@/components/ui';
 import { BellIcon } from '@/components/icons';
 import { useScooters } from '@/hooks/useScooters';
 import { useMaintenanceData } from '@/hooks/useAppData';
@@ -21,16 +21,23 @@ export default function NotificationsScreen() {
   const { schedules, items: maintenanceItems, km } = useMaintenanceData();
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Een mislukte query is geen lege meldingenlijst — die laten we zien. */
+  const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pushStatus, setPushStatus] = useState<string | null>(null);
 
+  const load = useCallback(() => {
+    setFailed(false);
+    listNotifications()
+      .then(setItems)
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      listNotifications()
-        .then(setItems)
-        .catch(() => setItems([]))
-        .finally(() => setLoading(false));
-    }, []),
+      load();
+    }, [load]),
   );
 
   const unread = items.filter((i) => !i.read_at).length;
@@ -56,6 +63,21 @@ export default function NotificationsScreen() {
   }
 
   if (loading) return <Loading label="Meldingen laden…" />;
+
+  if (failed) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LoadError
+          title="Meldingen niet geladen"
+          subtitle="Je meldingen konden niet worden opgehaald. Controleer je verbinding en probeer het opnieuw."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

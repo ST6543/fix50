@@ -30,14 +30,24 @@ export default function DiagnosisScreen({ embedded = false }: { embedded?: boole
   const navigation = useNavigation<Nav>();
   const { activeScooter } = useScooters();
   const [sessions, setSessions] = useState<ChatSession[] | null>(null);
+  /** Een mislukte query mag niet als "nog geen gesprekken" tellen. */
+  const [failed, setFailed] = useState(false);
+
+  const load = useCallback(() => {
+    setFailed(false);
+    chatService
+      .listSessions()
+      .then(setSessions)
+      .catch(() => {
+        setFailed(true);
+        setSessions([]);
+      });
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      chatService
-        .listSessions()
-        .then(setSessions)
-        .catch(() => setSessions([]));
-    }, []),
+      load();
+    }, [load]),
   );
 
   const loaded = sessions !== null;
@@ -75,6 +85,25 @@ export default function DiagnosisScreen({ embedded = false }: { embedded?: boole
               style={styles.hero}
             />
           </FadeInView>
+
+          {failed ? (
+            <Card style={styles.loadErrorCard}>
+              <Text style={styles.loadErrorTitle}>Gesprekken niet geladen</Text>
+              <Text style={styles.loadErrorBody}>
+                De cijfers hieronder zijn niet opgehaald, dus ze zeggen niets over je gebruik.
+                Controleer je verbinding en probeer het opnieuw.
+              </Text>
+              <Button
+                label="Opnieuw proberen"
+                variant="secondary"
+                onPress={() => {
+                  setSessions(null);
+                  load();
+                }}
+                style={{ marginTop: spacing.m }}
+              />
+            </Card>
+          ) : null}
 
           {/* Stat-tiles: echte cijfers uit de chatgeschiedenis */}
           <FadeInView index={2}>
@@ -171,6 +200,20 @@ const styles = StyleSheet.create({
   statRow: { flexDirection: 'row', gap: spacing.s, marginTop: spacing.m },
   chartCard: { paddingVertical: spacing.l },
   hint: { color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.l },
+  loadErrorCard: { marginTop: spacing.m, borderColor: 'rgba(239,68,68,0.32)' },
+  loadErrorTitle: {
+    color: colors.danger,
+    fontFamily: fonts.bodySemiBold,
+    fontSize: 14.5,
+    fontWeight: '600',
+  },
+  loadErrorBody: {
+    color: colors.textMuted,
+    fontFamily: fonts.body,
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 2,
+  },
   scooterCard: { marginTop: spacing.xl },
   scooterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.m },
   scooterText: { flex: 1 },

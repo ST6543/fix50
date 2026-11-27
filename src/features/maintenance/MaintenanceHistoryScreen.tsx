@@ -19,6 +19,7 @@ import {
   Card,
   EmptyState,
   Input,
+  LoadError,
   Loading,
   SegmentSwitch,
 } from '@/components/ui';
@@ -64,6 +65,8 @@ export default function MaintenanceHistoryScreen() {
   /** Eerder uitgegeven facturen: nummer + bevroren snapshot. */
   const [invoices, setInvoices] = useState<InvoiceRegisterEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Een mislukte query is geen lege geschiedenis — die laten we zien. */
+  const [failed, setFailed] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
@@ -76,23 +79,29 @@ export default function MaintenanceHistoryScreen() {
   const [toText, setToText] = useState('');
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
+  const load = useCallback(() => {
+    if (!activeScooter) {
+      setLoading(false);
+      return;
+    }
+    setFailed(false);
+    Promise.all([
+      listRecords(activeScooter.id, 200),
+      // Register is optioneel zolang de migratie nog niet is toegepast.
+      listInvoices(activeScooter.id, 25).catch(() => [] as InvoiceRegisterEntry[]),
+    ])
+      .then(([nextRecords, nextInvoices]) => {
+        setRecords(nextRecords);
+        setInvoices(nextInvoices);
+      })
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
+  }, [activeScooter]);
+
   useFocusEffect(
     useCallback(() => {
-      if (!activeScooter) {
-        setLoading(false);
-        return;
-      }
-      Promise.all([
-        listRecords(activeScooter.id, 200).catch(() => [] as MaintenanceRecord[]),
-        // Register is optioneel zolang de migratie nog niet is toegepast.
-        listInvoices(activeScooter.id, 25).catch(() => [] as InvoiceRegisterEntry[]),
-      ])
-        .then(([nextRecords, nextInvoices]) => {
-          setRecords(nextRecords);
-          setInvoices(nextInvoices);
-        })
-        .finally(() => setLoading(false));
-    }, [activeScooter]),
+      load();
+    }, [load]),
   );
 
   /** Naam van een registratie: eigen omschrijving, anders de onderdeelnaam. */
@@ -117,6 +126,21 @@ export default function MaintenanceHistoryScreen() {
   }, [invoiceOpen, invoiceMode, selectedRecordId, records, fromText, toText]);
 
   if (loading) return <Loading label="Geschiedenis laden…" />;
+
+  if (failed) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LoadError
+          title="Geschiedenis niet geladen"
+          subtitle="Je onderhoudsbeurten konden niet worden opgehaald. Controleer je verbinding en probeer het opnieuw."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   const totalCents = records.reduce((sum, r) => sum + (r.cost_cents ?? 0), 0);
   const withCost = records.filter((r) => r.cost_cents !== null).length;

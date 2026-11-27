@@ -1,10 +1,19 @@
 /** Tijdlijn per scooter — onderhoud, tanken, tuning, metingen en diagnoses op één lijn. */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
 
-import { Card, Chip, ChipRow, EmptyState, IconTile, Loading, type IconTone } from '@/components/ui';
+import {
+  Card,
+  Chip,
+  ChipRow,
+  EmptyState,
+  IconTile,
+  LoadError,
+  Loading,
+  type IconTone,
+} from '@/components/ui';
 import {
   ChatIcon,
   DropletIcon,
@@ -53,53 +62,76 @@ export default function TimelineScreen() {
 
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Een mislukte query is geen lege geschiedenis — die laten we zien. */
+  const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState<TimelineKind | 'alles'>('alles');
+  /** Laatste aanvraag wint: een trage fetch mag de volgende scooter niet overschrijven. */
+  const requestRef = useRef(0);
+
+  const load = useCallback(() => {
+    if (!scooterId) {
+      setEvents([]);
+      setLoading(false);
+      return;
+    }
+    const request = ++requestRef.current;
+    setFailed(false);
+    Promise.all([
+      listRecords(scooterId, 200),
+      listMaintenanceItems(),
+      listFuelLogs(scooterId, 200),
+      listChanges(scooterId, 200),
+      listRuns(200, scooterId),
+      // Gesprekken zijn niet per scooter op te halen; de bouwer filtert ze.
+      listSessions(),
+    ])
+      .then(([records, items, fuelLogs, changes, runs, sessions]) => {
+        if (requestRef.current !== request) return;
+        setEvents(
+          buildScooterTimeline({
+            scooterId,
+            records,
+            items,
+            fuelLogs,
+            changes,
+            runs,
+            sessions,
+          }),
+        );
+      })
+      .catch(() => {
+        if (requestRef.current === request) setFailed(true);
+      })
+      .finally(() => {
+        if (requestRef.current === request) setLoading(false);
+      });
+  }, [scooterId]);
 
   useFocusEffect(
     useCallback(() => {
-      if (!scooterId) {
-        setEvents([]);
-        setLoading(false);
-        return;
-      }
-      let alive = true;
-      setLoading(true);
-      Promise.all([
-        listRecords(scooterId, 200).catch(() => []),
-        listMaintenanceItems().catch(() => []),
-        listFuelLogs(scooterId, 200).catch(() => []),
-        listChanges(scooterId, 200).catch(() => []),
-        listRuns(200, scooterId).catch(() => []),
-        // Gesprekken zijn niet per scooter op te halen; de bouwer filtert ze.
-        listSessions().catch(() => []),
-      ])
-        .then(([records, items, fuelLogs, changes, runs, sessions]) => {
-          if (!alive) return;
-          setEvents(
-            buildScooterTimeline({
-              scooterId,
-              records,
-              items,
-              fuelLogs,
-              changes,
-              runs,
-              sessions,
-            }),
-          );
-        })
-        .finally(() => {
-          if (alive) setLoading(false);
-        });
-      return () => {
-        alive = false;
-      };
-    }, [scooterId]),
+      load();
+    }, [load]),
   );
 
   const counts = useMemo(() => timelineCounts(events), [events]);
   const visible = useMemo(() => filterTimeline(events, filter), [events, filter]);
 
   if (loading) return <Loading label="Tijdlijn laden…" />;
+
+  if (failed) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LoadError
+          title="Tijdlijn niet geladen"
+          subtitle="De gebeurtenissen van deze scooter konden niet worden opgehaald. Controleer je verbinding en probeer het opnieuw."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>

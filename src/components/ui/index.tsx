@@ -16,7 +16,7 @@ import {
 import Svg, { Circle } from 'react-native-svg';
 
 import { PressableScale } from '@/components/motion';
-import { ArrowRightIcon } from '@/components/icons';
+import { AlertCircleIcon, ArrowRightIcon } from '@/components/icons';
 import { colors, fonts, layout, radii, shadows, spacing, typography } from '@/theme';
 import type { IconProps } from '@/components/icons';
 
@@ -677,6 +677,31 @@ export function EmptyState({
         <Button label={actionLabel} onPress={onAction} style={{ marginTop: spacing.l }} />
       ) : null}
     </View>
+  );
+}
+
+/**
+ * Laadfout — een mislukte query mag nooit als "nog niets" overkomen.
+ * Zegt wat er niet geladen is en biedt één knop om het opnieuw te proberen.
+ */
+export function LoadError({
+  title,
+  subtitle = 'Controleer je verbinding en probeer het opnieuw.',
+  onRetry,
+}: {
+  title: string;
+  subtitle?: string;
+  onRetry: () => void;
+}) {
+  return (
+    <EmptyState
+      icon={AlertCircleIcon}
+      tone="danger"
+      title={title}
+      subtitle={subtitle}
+      actionLabel="Opnieuw proberen"
+      onAction={onRetry}
+    />
   );
 }
 

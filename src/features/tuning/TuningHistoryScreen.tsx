@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { AppNav } from '@/navigation/types';
 
-import { Button, Card, EmptyState, Loading } from '@/components/ui';
+import { Button, Card, EmptyState, LoadError, Loading } from '@/components/ui';
 import { groupHistoryRows, isJetChangePart, splitJetNotes } from '@/lib/jet-log';
 import { JetChangeCard, JetUndoStrip, useJetChangeActions } from './JetChangeCard';
 import { SlidersIcon } from '@/components/icons';
@@ -28,6 +28,8 @@ export default function TuningHistoryScreen() {
   const { activeScooter } = useScooters();
   const [changes, setChanges] = useState<TuningChange[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Een mislukte query is geen lege geschiedenis — die laten we zien. */
+  const [failed, setFailed] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -57,18 +59,23 @@ export default function TuningHistoryScreen() {
     setChanges(rows);
   }
 
+  const load = useCallback(() => {
+    if (!activeScooter) {
+      setLoading(false);
+      return;
+    }
+    setFailed(false);
+    tuningService
+      .listChanges(activeScooter.id)
+      .then(setChanges)
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
+  }, [activeScooter]);
+
   useFocusEffect(
     useCallback(() => {
-      if (!activeScooter) {
-        setLoading(false);
-        return;
-      }
-      tuningService
-        .listChanges(activeScooter.id)
-        .then(setChanges)
-        .catch(() => setChanges([]))
-        .finally(() => setLoading(false));
-    }, [activeScooter]),
+      load();
+    }, [load]),
   );
 
   const jetCount = changes.filter((c) => isJetChangePart(c.part)).length;
@@ -90,6 +97,21 @@ export default function TuningHistoryScreen() {
   });
 
   if (loading) return <Loading label="Tuninggeschiedenis laden…" />;
+
+  if (failed) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <LoadError
+          title="Tuninggeschiedenis niet geladen"
+          subtitle="Je wijzigingen konden niet worden opgehaald. Controleer je verbinding en probeer het opnieuw."
+          onRetry={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
