@@ -7,6 +7,7 @@ import type { AppNav } from '@/navigation/types';
 
 import { Button, Card, ErrorText, Input, SectionTitle } from '@/components/ui';
 import { useScooters } from '@/hooks/useScooters';
+import CostsSection from './CostsSection';
 import * as scootersService from '@/services/scooters';
 import { listRecords } from '@/services/maintenance';
 import { isBelowLastService, kmBehindMessage, lastServiceKmFromRecords } from '@/lib/km-history';
@@ -123,6 +124,8 @@ export default function ScooterDetailScreen() {
           variant="secondary"
           onPress={() => navigation.navigate('Timeline', { scooterId: scooter.id })}
         />
+
+        <CostsSection scooterId={scooter.id} />
 
         <SectionTitle>Setup</SectionTitle>
         <Card>
